@@ -1,0 +1,45 @@
+name: Weekly Reviews Report
+on:
+  schedule:
+    - cron: '0 16 * * 1'  # Every Monday at 8am PT (16:00 UTC)
+  workflow_dispatch: {}     # Manual trigger
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore DB cache
+        uses: actions/cache@v4
+        with:
+          path: data/reviews.db
+          key: reviews-db-${{ github.run_id }}
+          restore-keys: reviews-db-
+
+      - name: Initialize database
+        run: python -m src.main init
+
+      - name: Sync new reviews
+        run: python -m src.main sync
+        env:
+          OUTSCRAPER_API_KEY: ${{ secrets.OUTSCRAPER_API_KEY }}
+
+      - name: Write service account credentials
+        run: echo '${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}' > /tmp/service-account.json
+
+      - name: Generate weekly report
+        run: python -m src.main report-weekly auto
+        env:
+          GOOGLE_SHEETS_CREDENTIALS_FILE: /tmp/service-account.json
+          TARGET_SHEET_ID: ${{ secrets.TARGET_SHEET_ID }}
+
+      - name: Show status
+        run: python -m src.main status
