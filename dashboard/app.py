@@ -266,6 +266,12 @@ def render_sidebar():
                 </div>
             </div>
             """, unsafe_allow_html=True)
+        st.markdown("---")
+
+        # Refresh button
+        if st.button("🔄 Refresh Data", use_container_width=True, key="refresh_btn"):
+            st.cache_data.clear()
+            st.rerun()
 
         st.markdown("---")
 
@@ -571,8 +577,8 @@ def page_overview(reviews_df, stores_df, selected_brands):
     st.markdown('<div class="section-header">Store Performance</div>', unsafe_allow_html=True)
 
     if not filtered_stores.empty:
-        current_year = date.today().year
-        current_month = date.today().month
+        current_year = 2025  # Reporting year
+        current_month = 12   # Show all months
         prior_year = current_year - 1
         month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -584,7 +590,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
             # Current rating (from store metadata)
             cur_rating = store.get("current_rating")
 
-            # 2025 (prior year) average
+            # 2024 (prior year) average
             prior_year_metrics = period_metrics(
                 pid,
                 date(prior_year, 1, 1),
@@ -612,7 +618,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
                 "YTD # Reviews": ytd_count,
             }
 
-            # Monthly breakdown (# Reviews + Average Rate for each month up to current)
+            # Monthly breakdown (# Reviews + Average Rate for each month)
             for m in range(1, current_month + 1):
                 mm = monthly_metrics(pid, current_year, m)
                 row_data[f"{month_names[m-1]} #"] = mm["review_count"] if mm["review_count"] > 0 else 0
@@ -836,6 +842,16 @@ def page_needs_attention(reviews_df):
             "Review Text": st.column_config.TextColumn(width="large"),
             "Owner Response": st.column_config.TextColumn(width="medium"),
         }
+    )
+
+    # CSV Export
+    csv = display_cols.to_csv(index=False)
+    st.download_button(
+        label="📥 Export Needs Attention",
+        data=csv,
+        file_name=f"needs_attention_{date.today().isoformat()}.csv",
+        mime="text/csv",
+        key="needs_attention_export"
     )
 
 

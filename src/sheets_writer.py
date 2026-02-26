@@ -46,10 +46,23 @@ def build_store_row_map(worksheet: gspread.Worksheet) -> dict[tuple[str, str], i
     current_brand = ""
     row_map = {}
 
+    # Brand keywords to match against. Maps keyword -> canonical brand name.
+    # The Sheet may use abbreviations like "INSPIRED" or full names like "Inspired Cannabis".
+    brand_keywords = {
+        "inspired": "Inspired Cannabis",
+        "imagine": "Imagine Cannabis",
+        "dutch love": "Dutch Love",
+        "cannabis supply": "Cannabis Supply Co.",
+        "muse": "Muse Cannabis",
+    }
+
+    # Also detect summary/subtotal rows to skip them
+    summary_keywords = ["total", "average", "summary", "subtotal"]
+
     for i, row in enumerate(all_values):
         row_num = i + 1  # 1-indexed
 
-        # Skip header rows (first 2-3 rows typically)
+        # Skip header rows (first 3 rows typically)
         if row_num <= 3:
             continue
 
@@ -58,13 +71,26 @@ def build_store_row_map(worksheet: gspread.Worksheet) -> dict[tuple[str, str], i
         if not cell_a:
             continue
 
-        # Check if this is a brand header row (e.g., "Inspired Cannabis")
-        brand_names = [
-            "Inspired Cannabis", "Imagine Cannabis", "Dutch Love",
-            "Cannabis Supply Co.", "Muse Cannabis"
-        ]
-        if any(cell_a.lower() == b.lower() for b in brand_names):
-            current_brand = cell_a
+        cell_lower = cell_a.lower()
+
+        # Check if this is a brand header row
+        matched_brand = None
+        for keyword, canonical in brand_keywords.items():
+            if keyword in cell_lower:
+                matched_brand = canonical
+                break
+
+        if matched_brand:
+            current_brand = matched_brand
+            logger.debug(f"  Brand header at row {row_num}: '{cell_a}' -> {current_brand}")
+            continue
+
+        # Skip summary/subtotal rows (typically contain only numbers, no store name format)
+        if any(kw in cell_lower for kw in summary_keywords):
+            continue
+
+        # Check if this looks like a header row (has "Current rate" in adjacent columns)
+        if len(row) > 1 and row[1].strip().lower() in ("current rate", "current rating"):
             continue
 
         # This is a store row
@@ -77,7 +103,7 @@ def build_store_row_map(worksheet: gspread.Worksheet) -> dict[tuple[str, str], i
 
 
 def update_current_ratings(worksheet: gspread.Worksheet, report_data: list[dict]) -> int:
-    """Update Column B (Current Rating) for each store. Returns count of cells updated."""
+    """Update Column B (Current Rating) for each store. Plain values from Outscraper metadata."""
     updated = 0
     batch_updates = []
 
@@ -97,98 +123,116 @@ def update_current_ratings(worksheet: gspread.Worksheet, report_data: list[dict]
     return updated
 
 
-def update_ytd_metrics(worksheet: gspread.Worksheet, report_data: list[dict]) -> int:
-    """Update YTD columns (D = avg, E = count). Returns count of stores updated."""
+def write_formulas(worksheet: gspread.Worksheet, year: int, current_month: int) -> int:
+    """
+    Write Google Sheet formulas to the Online Reviews tab.
+
+    All formulas reference the 'All Reviews' tab where:
+        Column A = Date, B = Brand, C = Store, D = Rating
+
+    Uses date range criteria (">="&DATE(...), "<"&DATE(...)) because
+    Google Sheets COUNTIFS/AVERAGEIFS don't support YEAR()/MONTH() on ranges.
+
+    Columns written:
+        C  = Prior year average (AVERAGEIFS)
+        D  = YTD average (AVERAGEIFS for full year)
+        E  = YTD # Reviews (COUNTIFS for full year)
+        F-AC = Monthly count + avg per month
+        AE = 1★ count, AG = 5★ count
+    """
+    prior_year = year - 1
     updated = 0
     batch_updates = []
 
-    for store in report_data:
-        key = (store["brand"], store["store_name"])
-        row = STORE_ROW_MAP.get(key)
-        if row:
-            batch_updates.append({
-                "range": f"D{row}:E{row}",
-                "values": [[store["ytd_avg"], store["ytd_count"]]]
-            })
-            updated += 1
+    # All Reviews tab references
+    ar_date = "'All Reviews'!A:A"
+    ar_store = "'All Reviews'!C:C"
+    ar_rating = "'All Reviews'!D:D"
 
-    if batch_updates:
-        worksheet.batch_update(batch_updates)
-    logger.info(f"Updated {updated} YTD metrics")
-    return updated
+    # Month column mapping
+    month_cols = {
+        1:  ("F", "G"),   2:  ("H", "I"),   3:  ("J", "K"),
+        4:  ("L", "M"),   5:  ("N", "O"),   6:  ("P", "Q"),
+        7:  ("R", "S"),   8:  ("T", "U"),   9:  ("V", "W"),
+        10: ("X", "Y"),   11: ("Z", "AA"),  12: ("AB", "AC"),
+    }
 
+    for (brand, store_name), row in STORE_ROW_MAP.items():
+        store_ref = f"A{row}"  # Store name cell in Online Reviews tab
 
-def update_star_distributions(worksheet: gspread.Worksheet, report_data: list[dict]) -> int:
-    """Update star distribution columns (AD-AG). Returns count of stores updated."""
-    updated = 0
-    batch_updates = []
+        # ── Column C: Prior year average ──
+        formula_c = (
+            f'=IFERROR(ROUND(AVERAGEIFS({ar_rating}, {ar_store}, {store_ref}, '
+            f'{ar_date}, ">="&DATE({prior_year},1,1), '
+            f'{ar_date}, "<"&DATE({year},1,1)), 1), "")'
+        )
+        batch_updates.append({"range": f"C{row}", "values": [[formula_c]]})
 
-    for store in report_data:
-        key = (store["brand"], store["store_name"])
-        row = STORE_ROW_MAP.get(key)
-        if row:
-            batch_updates.append({
-                "range": f"AD{row}:AG{row}",
-                "values": [[
-                    store["ytd_one_star_count"],
-                    store["ytd_one_star_pct"],
-                    store["ytd_five_star_count"],
-                    store["ytd_five_star_pct"],
-                ]]
-            })
-            updated += 1
+        # ── Column D: YTD Average (full year) ──
+        formula_d = (
+            f'=IFERROR(ROUND(AVERAGEIFS({ar_rating}, {ar_store}, {store_ref}, '
+            f'{ar_date}, ">="&DATE({year},1,1), '
+            f'{ar_date}, "<"&DATE({year + 1},1,1)), 1), "")'
+        )
+        batch_updates.append({"range": f"D{row}", "values": [[formula_d]]})
 
-    if batch_updates:
-        worksheet.batch_update(batch_updates)
-    logger.info(f"Updated {updated} star distributions")
-    return updated
+        # ── Column E: YTD # Reviews (full year) ──
+        formula_e = (
+            f'=COUNTIFS({ar_store}, {store_ref}, '
+            f'{ar_date}, ">="&DATE({year},1,1), '
+            f'{ar_date}, "<"&DATE({year + 1},1,1))'
+        )
+        batch_updates.append({"range": f"E{row}", "values": [[formula_e]]})
 
-
-def update_monthly_data(
-    worksheet: gspread.Worksheet,
-    year: int,
-    month: int,
-    report_data: list[dict],
-    month_col_map: Optional[dict[int, tuple[str, str]]] = None
-) -> int:
-    """
-    Update monthly review count and average columns.
-
-    The column mapping depends on the sheet layout. month_col_map maps
-    month number (1-12) -> (count_col, avg_col) letter pairs.
-    """
-    if month_col_map is None:
-        # Default mapping: Jan starts at F, each month uses 2 columns
-        # F=Jan count, G=Jan avg, H=Feb count, I=Feb avg, etc.
-        cols = "FGHIJKLMNOPQRSTUVWXYZAAABAC"
-        month_col_map = {}
+        # ── Columns F-AC: Monthly # Reviews and Average Rate ──
         for m in range(1, 13):
-            idx = (m - 1) * 2
-            if idx + 1 < len(cols):
-                month_col_map[m] = (cols[idx], cols[idx + 1])
+            count_col, avg_col = month_cols[m]
 
-    col_pair = month_col_map.get(month)
-    if not col_pair:
-        logger.warning(f"No column mapping for month {month}")
-        return 0
+            # Date range for this month
+            if m == 12:
+                next_year, next_month = year + 1, 1
+            else:
+                next_year, next_month = year, m + 1
 
-    count_col, avg_col = col_pair
-    updated = 0
-    batch_updates = []
+            # Monthly review count
+            formula_count = (
+                f'=COUNTIFS({ar_store}, {store_ref}, '
+                f'{ar_date}, ">="&DATE({year},{m},1), '
+                f'{ar_date}, "<"&DATE({next_year},{next_month},1))'
+            )
+            # Monthly average rating (rounded to 1 decimal)
+            formula_avg = (
+                f'=IFERROR(ROUND(AVERAGEIFS({ar_rating}, {ar_store}, {store_ref}, '
+                f'{ar_date}, ">="&DATE({year},{m},1), '
+                f'{ar_date}, "<"&DATE({next_year},{next_month},1)), 1), 0)'
+            )
 
-    for store in report_data:
-        key = (store["brand"], store["store_name"])
-        row = STORE_ROW_MAP.get(key)
-        if row:
-            batch_updates.append({
-                "range": f"{count_col}{row}:{avg_col}{row}",
-                "values": [[store["month_count"], store["month_avg"]]]
-            })
-            updated += 1
+            batch_updates.append({"range": f"{count_col}{row}", "values": [[formula_count]]})
+            batch_updates.append({"range": f"{avg_col}{row}", "values": [[formula_avg]]})
+
+        # ── Column AE: 1★ count (full year) ──
+        formula_1star = (
+            f'=COUNTIFS({ar_store}, {store_ref}, {ar_rating}, 1, '
+            f'{ar_date}, ">="&DATE({year},1,1), '
+            f'{ar_date}, "<"&DATE({year + 1},1,1))'
+        )
+        batch_updates.append({"range": f"AE{row}", "values": [[formula_1star]]})
+
+        # ── Column AG: 5★ count (full year) ──
+        formula_5star = (
+            f'=COUNTIFS({ar_store}, {store_ref}, {ar_rating}, 5, '
+            f'{ar_date}, ">="&DATE({year},1,1), '
+            f'{ar_date}, "<"&DATE({year + 1},1,1))'
+        )
+        batch_updates.append({"range": f"AG{row}", "values": [[formula_5star]]})
+
+        updated += 1
 
     if batch_updates:
-        worksheet.batch_update(batch_updates)
-    logger.info(f"Updated {updated} monthly data for {year}-{month:02d}")
+        # Use USER_ENTERED so Google Sheets interprets formulas
+        worksheet.batch_update(batch_updates, value_input_option="USER_ENTERED")
+
+    logger.info(f"Wrote formulas for {updated} stores ({len(batch_updates)} cells)")
     return updated
 
 
@@ -243,7 +287,7 @@ def populate_all_reviews_tab(
 
     # Clear and rewrite (preserving notes)
     worksheet.clear()
-    worksheet.update(range_name="A1", values=rows)
+    worksheet.update(range_name="A1", values=rows, value_input_option="USER_ENTERED")
 
     # Format header row
     worksheet.format("A1:H1", {
@@ -303,7 +347,7 @@ def populate_needs_attention_tab(
         ])
 
     worksheet.clear()
-    worksheet.update(range_name="A1", values=rows)
+    worksheet.update(range_name="A1", values=rows, value_input_option="USER_ENTERED")
 
     # Format header with red accent for urgency
     worksheet.format("A1:H1", {

@@ -29,9 +29,7 @@ from .sheets_writer import (
     populate_all_reviews_tab,
     populate_needs_attention_tab,
     update_current_ratings,
-    update_monthly_data,
-    update_star_distributions,
-    update_ytd_metrics,
+    write_formulas,
 )
 
 # Configure logging
@@ -176,18 +174,19 @@ def cmd_report_monthly(args) -> None:
     online_reviews = spreadsheet.worksheet("Online Reviews")
     build_store_row_map(online_reviews)
 
+    # Write current ratings (plain values from Outscraper)
     update_current_ratings(online_reviews, report)
-    update_ytd_metrics(online_reviews, report)
-    update_star_distributions(online_reviews, report)
-    update_monthly_data(online_reviews, year, month, report)
 
-    # Update All Reviews tab
+    # Update All Reviews tab FIRST (formulas reference this data)
     all_reviews = get_all_reviews_for_tab()
     populate_all_reviews_tab(spreadsheet, all_reviews)
 
     # Update Needs Attention tab
     needs_attention = get_needs_attention_reviews()
     populate_needs_attention_tab(spreadsheet, needs_attention)
+
+    # Write formulas (C, F-AC, AE, AG) — auto-calculate from All Reviews data
+    write_formulas(online_reviews, year, month)
 
     logger.info("Monthly report complete — Google Sheet updated ✅")
 

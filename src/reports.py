@@ -116,14 +116,16 @@ def compute_monthly_report(year: int, month: int) -> list[dict]:
     Returns a list of dicts, one per store, with all metrics:
         {
             "place_id", "brand", "store_name",
-            "current_rating",
+            "current_rating", "prior_year_avg",
             "ytd_avg", "ytd_count", "ytd_five_star_count", "ytd_five_star_pct",
             "ytd_one_star_count", "ytd_one_star_pct",
             "month_count", "month_avg",
+            "monthly_data": {1: {"count": int, "avg": float}, ...},
             "mom_shift",
         }
     """
     stores = db.get_all_stores()
+    prior_year = year - 1
     report = []
 
     for store in stores:
@@ -132,11 +134,25 @@ def compute_monthly_report(year: int, month: int) -> list[dict]:
         monthly = monthly_metrics(pid, year, month)
         shift = mom_shift(pid, year, month)
 
+        # Prior year average (e.g., full 2025)
+        prior = period_metrics(pid, date(prior_year, 1, 1), date(prior_year, 12, 31))
+        prior_avg = prior["avg_rating"] if prior["review_count"] > 0 else None
+
+        # Compute all months from Jan to current month
+        all_months = {}
+        for m in range(1, month + 1):
+            mm = monthly_metrics(pid, year, m)
+            all_months[m] = {
+                "count": mm["review_count"],
+                "avg": mm["avg_rating"] if mm["review_count"] > 0 else 0,
+            }
+
         report.append({
             "place_id": pid,
             "brand": store["brand"],
             "store_name": store["store_name"],
             "current_rating": store.get("current_rating"),
+            "prior_year_avg": prior_avg,
             "ytd_avg": ytd["avg_rating"],
             "ytd_count": ytd["review_count"],
             "ytd_five_star_count": ytd["five_star_count"],
@@ -145,6 +161,7 @@ def compute_monthly_report(year: int, month: int) -> list[dict]:
             "ytd_one_star_pct": ytd["one_star_pct"],
             "month_count": monthly["review_count"],
             "month_avg": monthly["avg_rating"],
+            "monthly_data": all_months,
             "mom_shift": shift,
         })
 
