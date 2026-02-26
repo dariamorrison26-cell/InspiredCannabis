@@ -2,7 +2,7 @@
 
 import logging
 import time
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 from outscraper import ApiClient
@@ -50,7 +50,7 @@ class OutscraperClient:
                     reviews_limit=reviews_limit,
                     language="en",
                     sort="newest",
-                    cutoff=cutoff_date.isoformat() if cutoff_date else None
+                    cutoff=int(datetime.combine(cutoff_date, datetime.min.time()).timestamp()) if cutoff_date else None
                 )
 
                 for place_data in results:

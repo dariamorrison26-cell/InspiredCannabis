@@ -144,16 +144,16 @@ def cmd_sync(args) -> None:
 
 def cmd_report_monthly(args) -> None:
     """Generate and push monthly report to Google Sheets."""
-    if args.period == "auto":
+    if args.year and args.month:
+        year = int(args.year)
+        month = int(args.month)
+    else:
         # Auto-detect: report for the previous month
         today = date.today()
         if today.month == 1:
             year, month = today.year - 1, 12
         else:
             year, month = today.year, today.month - 1
-    else:
-        year = int(args.year)
-        month = int(args.month)
 
     logger.info(f"Generating monthly report for {year}-{month:02d}...")
 
@@ -194,14 +194,14 @@ def cmd_report_monthly(args) -> None:
 
 def cmd_report_weekly(args) -> None:
     """Generate and push weekly report to Google Sheets."""
-    if args.period == "auto":
+    if args.start and args.end:
+        week_start = date.fromisoformat(args.start)
+        week_end = date.fromisoformat(args.end)
+    else:
         # Auto: report for the previous week (Mon-Sun)
         today = date.today()
         week_end = today - timedelta(days=today.weekday() + 1)  # Last Sunday
         week_start = week_end - timedelta(days=6)  # Previous Monday
-    else:
-        week_start = date.fromisoformat(args.start)
-        week_end = date.fromisoformat(args.end)
 
     logger.info(f"Generating weekly report for {week_start} to {week_end}...")
 
@@ -258,6 +258,57 @@ def cmd_test_api(args) -> None:
         sys.exit(1)
 
 
+def cmd_test_sync(args) -> None:
+    """Test sync: fetch reviews for a few stores over a limited time window."""
+    api_key = os.getenv("OUTSCRAPER_API_KEY")
+    if not api_key:
+        logger.error("OUTSCRAPER_API_KEY not set")
+        sys.exit(1)
+
+    db.init_db()
+    stores = load_stores()
+    db.upsert_stores(stores)
+
+    # Pick N stores spread across brands
+    num_stores = args.stores
+    num_days = args.days
+
+    # Select stores: 1 per brand, cycling through brands
+    brands_seen = {}
+    selected = []
+    for s in stores:
+        brand = s["brand"]
+        if brand not in brands_seen:
+            brands_seen[brand] = True
+            selected.append(s)
+        if len(selected) >= num_stores:
+            break
+
+    cutoff = date.today() - timedelta(days=num_days)
+    place_ids = [s["place_id"] for s in selected]
+
+    logger.info(f"Test sync: {len(selected)} stores, last {num_days} days (since {cutoff})")
+    for s in selected:
+        logger.info(f"  • {s['brand']} — {s['store']}")
+
+    client = OutscraperClient(api_key)
+    results = client.fetch_reviews(place_ids, cutoff_date=cutoff, batch_size=len(place_ids))
+
+    reviews = [r for r in results if r.get("_type") != "store_rating"]
+    ratings = [r for r in results if r.get("_type") == "store_rating"]
+
+    if reviews:
+        inserted, skipped = db.upsert_reviews(reviews)
+        logger.info(f"Reviews: {inserted} inserted, {skipped} duplicates skipped")
+    else:
+        logger.info("No reviews found in the time window (this may be normal)")
+
+    for r in ratings:
+        db.update_store_rating(r["place_id"], r["current_rating"])
+    logger.info(f"Updated current ratings for {len(ratings)} stores")
+    logger.info(f"Total reviews now in DB: {db.get_review_count()}")
+
+
 def cmd_status(args) -> None:
     """Show database status."""
     db.init_db()
@@ -300,20 +351,21 @@ def main():
 
     # report monthly
     monthly_parser = subparsers.add_parser("report-monthly", help="Generate monthly report")
-    monthly_parser.add_argument("period", nargs="?", default="auto",
-                                help="'auto' or specify year and month")
-    monthly_parser.add_argument("year", nargs="?", help="Year (e.g., 2026)")
-    monthly_parser.add_argument("month", nargs="?", help="Month (e.g., 1)")
+    monthly_parser.add_argument("--year", type=str, help="Year (e.g., 2026). Omit for auto.")
+    monthly_parser.add_argument("--month", type=str, help="Month (e.g., 2). Omit for auto.")
 
     # report weekly
     weekly_parser = subparsers.add_parser("report-weekly", help="Generate weekly report")
-    weekly_parser.add_argument("period", nargs="?", default="auto",
-                               help="'auto' or specify start and end dates")
-    weekly_parser.add_argument("start", nargs="?", help="Start date (YYYY-MM-DD)")
-    weekly_parser.add_argument("end", nargs="?", help="End date (YYYY-MM-DD)")
+    weekly_parser.add_argument("--start", type=str, help="Start date YYYY-MM-DD. Omit for auto.")
+    weekly_parser.add_argument("--end", type=str, help="End date YYYY-MM-DD. Omit for auto.")
 
     # test-api
     subparsers.add_parser("test-api", help="Test Outscraper API connection")
+
+    # test-sync
+    test_sync_parser = subparsers.add_parser("test-sync", help="Test sync with limited stores/days")
+    test_sync_parser.add_argument("--stores", type=int, default=3, help="Number of stores to test (default: 3)")
+    test_sync_parser.add_argument("--days", type=int, default=14, help="Days of history to fetch (default: 14)")
 
     # status
     subparsers.add_parser("status", help="Show database status")
@@ -327,6 +379,7 @@ def main():
         "report-monthly": cmd_report_monthly,
         "report-weekly": cmd_report_weekly,
         "test-api": cmd_test_api,
+        "test-sync": cmd_test_sync,
         "status": cmd_status,
     }
 

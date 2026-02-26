@@ -36,7 +36,7 @@ jobs:
         run: echo '${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}' > /tmp/service-account.json
 
       - name: Generate weekly report
-        run: python -m src.main report-weekly auto
+        run: python -m src.main report-weekly
         env:
           GOOGLE_SHEETS_CREDENTIALS_FILE: /tmp/service-account.json
           TARGET_SHEET_ID: ${{ secrets.TARGET_SHEET_ID }}
