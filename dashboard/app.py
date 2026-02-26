@@ -633,6 +633,68 @@ def page_overview(reviews_df, stores_df, selected_brands):
 
         perf_df = pd.DataFrame(perf_data)
 
+        # ── Inline Filters Above Table ──────────────────────────────────
+        fcol1, fcol2, fcol3, fcol4 = st.columns([2, 2, 1.5, 1.5])
+        with fcol1:
+            table_brands = sorted(perf_df["Brand"].unique().tolist())
+            filter_brand = st.multiselect(
+                "🏷️ Filter by Brand",
+                options=table_brands,
+                default=table_brands,
+                key="perf_brand_filter"
+            )
+        with fcol2:
+            filter_store = st.text_input(
+                "🔍 Search Store",
+                value="",
+                placeholder="Type store name...",
+                key="perf_store_search"
+            )
+        with fcol3:
+            filter_min_rating = st.selectbox(
+                "⭐ Min Rating",
+                options=[0, 3.0, 3.5, 4.0, 4.5, 4.8],
+                index=0,
+                format_func=lambda x: "All" if x == 0 else f"≥ {x:.1f}",
+                key="perf_min_rating"
+            )
+        with fcol4:
+            sort_options = {
+                "Brand": "Brand",
+                "Store": "Store",
+                "Current Rate ↓": "Current Rate",
+                "YTD Avg ↓": "YTD Avg",
+                "YTD # Reviews ↓": "YTD # Reviews",
+            }
+            sort_choice = st.selectbox(
+                "↕️ Sort by",
+                options=list(sort_options.keys()),
+                index=0,
+                key="perf_sort"
+            )
+
+        # Apply inline filters
+        display_df = perf_df.copy()
+        if filter_brand:
+            display_df = display_df[display_df["Brand"].isin(filter_brand)]
+        if filter_store.strip():
+            display_df = display_df[
+                display_df["Store"].str.contains(filter_store.strip(), case=False, na=False)
+            ]
+        if filter_min_rating > 0:
+            display_df = display_df[
+                display_df["Current Rate"].fillna(0) >= filter_min_rating
+            ]
+
+        # Apply sort
+        sort_col = sort_options[sort_choice]
+        ascending = sort_choice in ("Brand", "Store")
+        display_df = display_df.sort_values(
+            sort_col, ascending=ascending, na_position="last"
+        ).reset_index(drop=True)
+
+        st.caption(f"Showing {len(display_df)} of {len(perf_df)} stores")
+
         # Build column config
         col_config = {
             "Current Rate": st.column_config.NumberColumn(format="%.1f"),
@@ -646,7 +708,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
             col_config[f"{month_names[m-1]} Avg"] = st.column_config.NumberColumn(format="%.1f")
 
         st.dataframe(
-            perf_df,
+            display_df,
             use_container_width=True,
             hide_index=True,
             height=600,
@@ -756,16 +818,22 @@ def page_needs_attention(reviews_df):
     """Render the Needs Attention page (1-2 star reviews)."""
     negative_df = reviews_df[reviews_df["rating"] <= 2].copy() if not reviews_df.empty else pd.DataFrame()
 
-    neg_count = len(negative_df)
+    # Filter to unresponded only by default
+    all_neg_count = len(negative_df)
+    unresponded_df = negative_df[
+        negative_df["owner_response"].isna() |
+        (negative_df["owner_response"] == "")
+    ].copy() if not negative_df.empty else pd.DataFrame()
+    unresponded_count = len(unresponded_df)
 
     st.markdown(f"""
     <div class="dashboard-header" style="background: linear-gradient(135deg, #8B0000 0%, #D32F2F 100%);">
         <div>
             <h1>🚨 Needs Attention</h1>
-            <div class="subtitle">1★ and 2★ reviews requiring response</div>
+            <div class="subtitle">Unresponded 1★ and 2★ reviews requiring action</div>
         </div>
         <div>
-            <span class="attention-badge">{neg_count} review{'s' if neg_count != 1 else ''}</span>
+            <span class="attention-badge">{unresponded_count} unresponded</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -774,26 +842,30 @@ def page_needs_attention(reviews_df):
         st.success("🎉 No negative reviews to address! All filtered reviews are 3★ or above.")
         return
 
+    # Toggle to show all vs unresponded only
+    show_all = st.toggle("Show all negative reviews (including responded)", value=False, key="needs_attn_toggle")
+    working_df = negative_df if show_all else unresponded_df
+
     # Quick stats
     col1, col2, col3 = st.columns(3)
     with col1:
-        render_kpi_card("Negative Reviews", neg_count)
+        render_kpi_card("Total Negative", all_neg_count)
     with col2:
-        responded = len(negative_df[
-            negative_df["owner_response"].notna() &
-            (negative_df["owner_response"] != "")
-        ])
-        rate = (responded / neg_count * 100) if neg_count > 0 else 0
+        responded = all_neg_count - unresponded_count
+        rate = (responded / all_neg_count * 100) if all_neg_count > 0 else 0
         render_kpi_card("Response Rate", f"{rate:.0f}", suffix="%")
     with col3:
-        unresponded = neg_count - responded
-        render_kpi_card("⚠️ Unresponded", unresponded)
+        render_kpi_card("⚠️ Unresponded", unresponded_count)
 
     st.markdown("")
 
+    if working_df.empty:
+        st.success("🎉 All negative reviews have been responded to!")
+        return
+
     # Negative reviews by brand
     st.markdown('<div class="section-header">Negative Reviews by Brand</div>', unsafe_allow_html=True)
-    brand_neg = negative_df.groupby("brand").size().reset_index(name="count").sort_values("count", ascending=False)
+    brand_neg = working_df.groupby("brand").size().reset_index(name="count").sort_values("count", ascending=False)
 
     fig = px.bar(
         brand_neg,
@@ -814,15 +886,59 @@ def page_needs_attention(reviews_df):
     )
     st.plotly_chart(fig, use_container_width=True)
 
+    # Inline filters for the table
+    fcol1, fcol2, fcol3 = st.columns([2, 2, 2])
+    with fcol1:
+        attn_brands = sorted(working_df["brand"].unique().tolist())
+        filter_attn_brand = st.multiselect(
+            "🏷️ Filter by Brand",
+            options=attn_brands,
+            default=attn_brands,
+            key="attn_brand_filter"
+        )
+    with fcol2:
+        filter_attn_store = st.text_input(
+            "🔍 Search Store",
+            value="",
+            placeholder="Type store name...",
+            key="attn_store_search"
+        )
+    with fcol3:
+        attn_sort = st.selectbox(
+            "↕️ Sort by",
+            options=["Newest First", "Oldest First", "Brand", "Store"],
+            index=0,
+            key="attn_sort"
+        )
+
+    # Apply filters
+    table_df = working_df.copy()
+    if filter_attn_brand:
+        table_df = table_df[table_df["brand"].isin(filter_attn_brand)]
+    if filter_attn_store.strip():
+        table_df = table_df[
+            table_df["store_name"].str.contains(filter_attn_store.strip(), case=False, na=False)
+        ]
+
     # Table
     st.markdown('<div class="section-header">Review Details</div>', unsafe_allow_html=True)
 
-    display_df = negative_df.sort_values("review_date", ascending=False)
+    display_df = table_df.copy()
     display_df["Rating"] = display_df["rating"].apply(lambda r: "⭐" * int(r) if pd.notna(r) else "")
     display_df["Status"] = display_df["owner_response"].apply(
         lambda r: "✅ Responded" if pd.notna(r) and str(r).strip() else "⚠️ No Response"
     )
     display_df["Date"] = display_df["review_date"].dt.strftime("%Y-%m-%d")
+
+    # Sort
+    if attn_sort == "Newest First":
+        display_df = display_df.sort_values("review_date", ascending=False)
+    elif attn_sort == "Oldest First":
+        display_df = display_df.sort_values("review_date", ascending=True)
+    elif attn_sort == "Brand":
+        display_df = display_df.sort_values(["brand", "store_name", "review_date"], ascending=[True, True, False])
+    elif attn_sort == "Store":
+        display_df = display_df.sort_values(["store_name", "review_date"], ascending=[True, False])
 
     display_cols = display_df[[
         "Date", "brand", "store_name", "Rating", "review_text", "Status", "owner_response"
@@ -832,6 +948,8 @@ def page_needs_attention(reviews_df):
         "review_text": "Review Text",
         "owner_response": "Owner Response",
     })
+
+    st.caption(f"Showing {len(display_cols)} reviews")
 
     st.dataframe(
         display_cols,
