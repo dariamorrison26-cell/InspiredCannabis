@@ -78,8 +78,9 @@ def cmd_initial_load(args) -> None:
 
     logger.info(f"Starting initial load for {len(place_ids)} stores (this may take a while)...")
 
-    # Fetch all reviews (no cutoff, no limit)
-    results = client.fetch_reviews(place_ids, reviews_limit=0, batch_size=5)
+    # Fetch reviews from 2025-01-01 onward only
+    cutoff = date(2025, 1, 1)
+    results = client.fetch_reviews(place_ids, cutoff_date=cutoff, reviews_limit=0, batch_size=5)
 
     # Separate reviews from store ratings
     reviews = [r for r in results if r.get("_type") != "store_rating"]
