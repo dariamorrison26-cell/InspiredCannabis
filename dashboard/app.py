@@ -81,33 +81,33 @@ st.markdown(f"""
     .dashboard-header {{
         background: linear-gradient(135deg, {NAVY} 0%, #2a4d73 100%);
         color: {WHITE};
-        padding: 1.2rem 2rem;
-        border-radius: 12px;
-        margin-bottom: 1.5rem;
+        padding: 0.6rem 1.5rem;
+        border-radius: 10px;
+        margin-bottom: 0.8rem;
         display: flex;
         align-items: center;
         justify-content: space-between;
     }}
     .dashboard-header h1 {{
         margin: 0;
-        font-size: 1.6rem;
+        font-size: 1.3rem;
         font-weight: 700;
         letter-spacing: 0.5px;
     }}
     .dashboard-header .subtitle {{
-        font-size: 0.85rem;
+        font-size: 0.75rem;
         opacity: 0.8;
-        margin-top: 4px;
+        margin-top: 2px;
     }}
 
     /* KPI Cards */
     .kpi-card {{
         background: {WHITE};
-        border-radius: 12px;
-        padding: 1.2rem 1rem;
+        border-radius: 10px;
+        padding: 0.5rem 0.8rem;
         text-align: center;
         box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        border-top: 4px solid {ORANGE};
+        border-top: 3px solid {ORANGE};
         transition: transform 0.2s;
     }}
     .kpi-card:hover {{
@@ -115,22 +115,22 @@ st.markdown(f"""
         box-shadow: 0 4px 16px rgba(0,0,0,0.1);
     }}
     .kpi-value {{
-        font-size: 2rem;
+        font-size: 1.5rem;
         font-weight: 800;
         color: {NAVY};
-        margin: 0.3rem 0;
+        margin: 0.15rem 0;
         line-height: 1;
     }}
     .kpi-label {{
-        font-size: 0.8rem;
+        font-size: 0.65rem;
         color: #666;
         text-transform: uppercase;
         letter-spacing: 1px;
         font-weight: 600;
     }}
     .kpi-delta {{
-        font-size: 0.75rem;
-        margin-top: 4px;
+        font-size: 0.7rem;
+        margin-top: 2px;
     }}
     .kpi-delta.positive {{ color: {SUCCESS}; }}
     .kpi-delta.negative {{ color: {ALERT}; }}
@@ -158,6 +158,11 @@ st.markdown(f"""
     [data-testid="stSidebar"] .stDateInput label {{
         color: rgba(255,255,255,0.85) !important;
         font-weight: 600;
+    }}
+    /* Date input text must be dark on white background */
+    [data-testid="stSidebar"] .stDateInput input {{
+        color: #1a1a2e !important;
+        background-color: {WHITE} !important;
     }}
 
     /* Tabs */
@@ -384,18 +389,6 @@ def render_kpi_card(label, value, delta=None, delta_label="", prefix="", suffix=
 def page_overview(reviews_df, stores_df, selected_brands):
     """Render the Executive Overview page."""
 
-    # Header
-    logo_b64 = get_logo_base64()
-    logo_html = f'<img src="data:image/png;base64,{logo_b64}" style="width: 44px; height: 44px; border-radius: 50%; vertical-align: middle; margin-right: 12px;" />' if logo_b64 else "🌿"
-    st.markdown(f"""
-    <div class="dashboard-header">
-        <div>
-            <h1>{logo_html} Cannabis Reviews Dashboard</h1>
-            <div class="subtitle">Multi-Brand Performance Analytics • {date.today().strftime('%B %Y')}</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
     # Filter stores by selected brands
     filtered_stores = stores_df[stores_df["brand"].isin(selected_brands)] if selected_brands else stores_df
 
@@ -455,7 +448,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
                 ))
 
             fig.update_layout(
-                height=300,
+                height=220,
                 margin=dict(l=0, r=20, t=10, b=0),
                 xaxis=dict(range=[0, 5], title="Average Rating"),
                 yaxis=dict(title=""),
@@ -482,7 +475,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
                 markers=True,
             )
             fig.update_layout(
-                height=300,
+                height=220,
                 margin=dict(l=0, r=20, t=10, b=0),
                 xaxis_title="Month",
                 yaxis_title="# Reviews",
@@ -513,7 +506,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
                 textfont=dict(size=12),
             )])
             fig.update_layout(
-                height=300,
+                height=220,
                 margin=dict(l=20, r=20, t=10, b=10),
                 paper_bgcolor="white",
                 legend=dict(orientation="h", y=-0.15),
@@ -563,7 +556,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
                 ))
 
             fig.update_layout(
-                height=300,
+                height=220,
                 margin=dict(l=0, r=20, t=10, b=0),
                 xaxis=dict(range=[0, 100], title="Response Rate (%)"),
                 yaxis=dict(title=""),
@@ -765,7 +758,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
             styled,
             use_container_width=True,
             hide_index=True,
-            height=600,
+            height=400,
             column_config=col_config,
         )
 
@@ -847,7 +840,7 @@ def page_all_reviews(reviews_df):
         display_cols,
         use_container_width=True,
         hide_index=True,
-        height=600,
+        height=400,
         column_config={
             "Review Text": st.column_config.TextColumn(width="large"),
             "Owner Response": st.column_config.TextColumn(width="medium"),
@@ -1192,6 +1185,122 @@ def page_weekly_report(reviews_df, stores_df):
     with kc4:
         render_kpi_card("Stores", stores_shown)
 
+    # ── Charts ──────────────────────────────────────────────────────
+    chart_colors = {
+        "primary": "#4FC3F7",
+        "secondary": "#81C784",
+        "negative": "#E57373",
+        "accent": "#FFD54F",
+        "text": "#E0E0E0",
+        "bg": "rgba(0,0,0,0)",
+        "grid": "rgba(255,255,255,0.08)",
+    }
+    chart_layout_w = dict(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#E0E0E0", family="Inter, sans-serif"),
+        margin=dict(l=40, r=20, t=30, b=30),
+        height=220,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    grid_c = "rgba(255,255,255,0.08)"
+
+    # Aggregate weekly data for charts
+    week_agg = weekly_df.groupby("Week", sort=False).agg({
+        "# Reviews": "sum",
+        "Avg Rating": lambda x: x[weekly_df.loc[x.index, "# Reviews"] > 0].mean() if (weekly_df.loc[x.index, "# Reviews"] > 0).any() else 0,
+        "5★ Count": "sum",
+        "1★ Count": "sum",
+    }).reset_index()
+
+    ch1, ch2 = st.columns(2)
+
+    with ch1:
+        # Chart 1: Weekly Review Volume
+        fig1 = go.Figure()
+        fig1.add_trace(go.Bar(
+            x=week_agg["Week"],
+            y=week_agg["# Reviews"],
+            marker_color=chart_colors["primary"],
+            marker_line_width=0,
+            hovertemplate="<b>%{x}</b><br>Reviews: %{y}<extra></extra>",
+        ))
+        fig1.update_layout(**chart_layout_w, title=dict(text="📊 Weekly Review Volume", font=dict(size=14)))
+        fig1.update_xaxes(gridcolor=grid_c)
+        fig1.update_yaxes(gridcolor=grid_c, title_text="# Reviews")
+        st.plotly_chart(fig1, use_container_width=True)
+
+    with ch2:
+        # Chart 2: Avg Rating Trend
+        valid_weeks = week_agg[week_agg["Avg Rating"] > 0]
+        fig2 = go.Figure()
+        fig2.add_trace(go.Scatter(
+            x=valid_weeks["Week"],
+            y=valid_weeks["Avg Rating"],
+            mode="lines+markers",
+            line=dict(color=chart_colors["secondary"], width=3),
+            marker=dict(size=8, color=chart_colors["secondary"], line=dict(width=2, color="white")),
+            hovertemplate="<b>%{x}</b><br>Avg: %{y:.2f}<extra></extra>",
+        ))
+        # Add 4.5 goal line
+        fig2.add_hline(y=4.5, line_dash="dot", line_color=chart_colors["accent"],
+                       annotation_text="4.5 Goal", annotation_font_color=chart_colors["accent"])
+        fig2.update_layout(**chart_layout_w, title=dict(text="📈 Avg Rating Trend", font=dict(size=14)))
+        fig2.update_xaxes(gridcolor=grid_c)
+        fig2.update_yaxes(gridcolor=grid_c, title_text="Avg Rating", range=[1, 5.2])
+        st.plotly_chart(fig2, use_container_width=True)
+
+    ch3, ch4 = st.columns(2)
+
+    with ch3:
+        # Chart 3: Brand Comparison
+        brand_agg = weekly_df.groupby("Brand").agg({
+            "# Reviews": "sum",
+            "5★ Count": "sum",
+            "1★ Count": "sum",
+        }).reset_index()
+        fig3 = go.Figure()
+        fig3.add_trace(go.Bar(
+            name="5★",
+            x=brand_agg["Brand"],
+            y=brand_agg["5★ Count"],
+            marker_color=chart_colors["secondary"],
+            hovertemplate="<b>%{x}</b><br>5★: %{y}<extra></extra>",
+        ))
+        fig3.add_trace(go.Bar(
+            name="1★",
+            x=brand_agg["Brand"],
+            y=brand_agg["1★ Count"],
+            marker_color=chart_colors["negative"],
+            hovertemplate="<b>%{x}</b><br>1★: %{y}<extra></extra>",
+        ))
+        fig3.update_layout(**chart_layout_w, title=dict(text="🏷️ Brand: 5★ vs 1★", font=dict(size=14)), barmode="group")
+        fig3.update_xaxes(gridcolor=grid_c)
+        fig3.update_yaxes(gridcolor=grid_c, title_text="Count")
+        st.plotly_chart(fig3, use_container_width=True)
+
+    with ch4:
+        # Chart 4: Star Distribution Over Weeks
+        fig4 = go.Figure()
+        fig4.add_trace(go.Bar(
+            name="5★",
+            x=week_agg["Week"],
+            y=week_agg["5★ Count"],
+            marker_color=chart_colors["secondary"],
+            hovertemplate="<b>%{x}</b><br>5★: %{y}<extra></extra>",
+        ))
+        fig4.add_trace(go.Bar(
+            name="1★",
+            x=week_agg["Week"],
+            y=week_agg["1★ Count"],
+            marker_color=chart_colors["negative"],
+            hovertemplate="<b>%{x}</b><br>1★: %{y}<extra></extra>",
+        ))
+        fig4.update_layout(**chart_layout_w, title=dict(text="⭐ Weekly Star Distribution", font=dict(size=14)), barmode="stack")
+        fig4.update_xaxes(gridcolor=grid_c)
+        fig4.update_yaxes(gridcolor=grid_c, title_text="Count")
+        st.plotly_chart(fig4, use_container_width=True)
+
     # ── Results summary ──
     st.caption(f"Showing {len(weekly_df)} rows • {len(weeks)} weeks • {stores_shown} stores")
 
@@ -1208,7 +1317,7 @@ def page_weekly_report(reviews_df, stores_df):
         weekly_df,
         use_container_width=True,
         hide_index=True,
-        height=600,
+        height=400,
         column_config=col_config,
     )
 
@@ -1334,6 +1443,140 @@ def page_monthly_report(reviews_df, stores_df):
         delta_class = "positive" if avg_mom >= 0 else "negative"
         render_kpi_card("Avg MOM Shift", f"{avg_mom:+.2f}")
 
+    # ── Charts (matching Weekly Report visual style) ────────────────
+    chart_colors = {
+        "primary": "#4FC3F7", "secondary": "#81C784", "negative": "#E57373",
+        "accent": "#FFD54F", "text": "#E0E0E0", "bg": "rgba(0,0,0,0)",
+        "grid": "rgba(255,255,255,0.08)",
+    }
+    chart_layout_m = dict(
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#E0E0E0", family="Inter, sans-serif"),
+        margin=dict(l=40, r=20, t=30, b=30), height=220,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    grid_cm = "rgba(255,255,255,0.08)"
+
+    # ── Build multi-month aggregation from reviews_df for trend charts ──
+    filtered_pids = filtered["place_id"].tolist()
+    trend_reviews = reviews_df[reviews_df["place_id"].isin(filtered_pids)].copy()
+    if "review_date" in trend_reviews.columns and not trend_reviews.empty:
+        trend_reviews["Month"] = trend_reviews["review_date"].dt.to_period("M")
+        all_months = sorted(trend_reviews["Month"].unique())
+        recent_months = all_months[-6:] if len(all_months) > 6 else all_months
+        trend_reviews = trend_reviews[trend_reviews["Month"].isin(recent_months)]
+
+        month_agg = trend_reviews.groupby("Month").agg(
+            total_reviews=("rating", "count"),
+            avg_rating=("rating", "mean"),
+            five_star=("rating", lambda x: (x == 5).sum()),
+            one_star=("rating", lambda x: (x <= 1).sum()),
+        ).reset_index()
+        month_agg["Month_str"] = month_agg["Month"].astype(str)
+    else:
+        month_agg = pd.DataFrame()
+
+    # Brand aggregation for current month
+    brand_agg = monthly_df.groupby("Brand").agg({
+        "# Reviews": "sum", "5★ Count": "sum", "1★ Count": "sum",
+    }).reset_index()
+
+    ch1, ch2 = st.columns(2)
+
+    with ch1:
+        # Chart 1: Monthly Review Volume (blue vertical bars)
+        fig1 = go.Figure()
+        if not month_agg.empty:
+            fig1.add_trace(go.Bar(
+                x=month_agg["Month_str"],
+                y=month_agg["total_reviews"],
+                marker_color=chart_colors["primary"],
+                marker_line_width=0,
+                hovertemplate="<b>%{x}</b><br>Reviews: %{y}<extra></extra>",
+            ))
+        fig1.update_layout(**chart_layout_m, title=dict(text="📊 Monthly Review Volume", font=dict(size=14)))
+        fig1.update_xaxes(gridcolor=grid_cm)
+        fig1.update_yaxes(gridcolor=grid_cm, title_text="# Reviews")
+        st.plotly_chart(fig1, use_container_width=True)
+
+    with ch2:
+        # Chart 2: Avg Rating Trend (green line+markers with 4.5 goal)
+        fig2 = go.Figure()
+        if not month_agg.empty:
+            valid = month_agg[month_agg["avg_rating"] > 0]
+            fig2.add_trace(go.Scatter(
+                x=valid["Month_str"],
+                y=valid["avg_rating"],
+                mode="lines+markers",
+                line=dict(color=chart_colors["secondary"], width=3),
+                marker=dict(size=8, color=chart_colors["secondary"], line=dict(width=2, color="white")),
+                hovertemplate="<b>%{x}</b><br>Avg: %{y:.2f}<extra></extra>",
+            ))
+        fig2.add_hline(y=4.5, line_dash="dot", line_color=chart_colors["accent"],
+                       annotation_text="4.5 Goal", annotation_font_color=chart_colors["accent"])
+        fig2.update_layout(**chart_layout_m, title=dict(text="📈 Avg Rating Trend", font=dict(size=14)))
+        fig2.update_xaxes(gridcolor=grid_cm)
+        fig2.update_yaxes(gridcolor=grid_cm, title_text="Avg Rating", range=[1, 5.2])
+        st.plotly_chart(fig2, use_container_width=True)
+
+    ch3, ch4 = st.columns(2)
+
+    with ch3:
+        # Chart 3: Brand 5★ vs 1★ (grouped bar)
+        fig3 = go.Figure()
+        fig3.add_trace(go.Bar(
+            name="5★", x=brand_agg["Brand"], y=brand_agg["5★ Count"],
+            marker_color=chart_colors["secondary"],
+            hovertemplate="<b>%{x}</b><br>5★: %{y}<extra></extra>",
+        ))
+        fig3.add_trace(go.Bar(
+            name="1★", x=brand_agg["Brand"], y=brand_agg["1★ Count"],
+            marker_color=chart_colors["negative"],
+            hovertemplate="<b>%{x}</b><br>1★: %{y}<extra></extra>",
+        ))
+        fig3.update_layout(**chart_layout_m, title=dict(text="🏷️ Brand: 5★ vs 1★", font=dict(size=14)), barmode="group")
+        fig3.update_xaxes(gridcolor=grid_cm)
+        fig3.update_yaxes(gridcolor=grid_cm, title_text="Count")
+        st.plotly_chart(fig3, use_container_width=True)
+
+    with ch4:
+        # Chart 4: Monthly Star Distribution (stacked bar)
+        fig4 = go.Figure()
+        if not month_agg.empty:
+            fig4.add_trace(go.Bar(
+                name="5★", x=month_agg["Month_str"], y=month_agg["five_star"],
+                marker_color=chart_colors["secondary"],
+                hovertemplate="<b>%{x}</b><br>5★: %{y}<extra></extra>",
+            ))
+            fig4.add_trace(go.Bar(
+                name="1★", x=month_agg["Month_str"], y=month_agg["one_star"],
+                marker_color=chart_colors["negative"],
+                hovertemplate="<b>%{x}</b><br>1★: %{y}<extra></extra>",
+            ))
+        fig4.update_layout(**chart_layout_m, title=dict(text="⭐ Monthly Star Distribution", font=dict(size=14)), barmode="stack")
+        fig4.update_xaxes(gridcolor=grid_cm)
+        fig4.update_yaxes(gridcolor=grid_cm, title_text="Count")
+        st.plotly_chart(fig4, use_container_width=True)
+
+    # Chart 5: MOM Shift by Store (kept as requested)
+    stores_with_shift = monthly_df[monthly_df["MOM Shift"] != 0].copy()
+    if not stores_with_shift.empty:
+        stores_with_shift = stores_with_shift.sort_values("MOM Shift", ascending=False)
+        fig5 = go.Figure()
+        fig5.add_trace(go.Bar(
+            x=stores_with_shift["Store"],
+            y=stores_with_shift["MOM Shift"],
+            marker_color=stores_with_shift["MOM Shift"].apply(
+                lambda x: chart_colors["secondary"] if x > 0 else chart_colors["negative"]
+            ),
+            hovertemplate="<b>%{x}</b><br>MOM Shift: %{y:+.2f}<extra></extra>",
+        ))
+        fig5.add_hline(y=0, line_color="rgba(255,255,255,0.3)", line_width=1)
+        fig5.update_layout(**chart_layout_m, title=dict(text=f"📉 MOM Shift by Store ({month_label})", font=dict(size=14)))
+        fig5.update_xaxes(gridcolor=grid_cm, tickangle=-45)
+        fig5.update_yaxes(gridcolor=grid_cm, title_text="Rating Change")
+        st.plotly_chart(fig5, use_container_width=True)
+
     st.caption(f"Showing {len(monthly_df)} stores for {month_label}")
 
     # ── Data Table with color-coded MOM Shift ──
@@ -1357,7 +1600,7 @@ def page_monthly_report(reviews_df, stores_df):
         styled,
         use_container_width=True,
         hide_index=True,
-        height=600,
+        height=400,
         column_config=col_config,
     )
 
@@ -1382,6 +1625,18 @@ def main():
 
     # Apply filters to reviews
     filtered_reviews = apply_filters(reviews_df, selected_brands, date_range, min_rating, search_term)
+
+    # Dashboard header
+    logo_b64 = get_logo_base64()
+    logo_html = f'<img src="data:image/png;base64,{logo_b64}" style="width: 44px; height: 44px; border-radius: 50%; vertical-align: middle; margin-right: 12px;" />' if logo_b64 else "🌿"
+    st.markdown(f"""
+    <div class="dashboard-header">
+        <div>
+            <h1>{logo_html} Cannabis Reviews Dashboard</h1>
+            <div class="subtitle">Multi-Brand Performance Analytics • {date.today().strftime('%B %Y')}</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     # Navigation tabs
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
