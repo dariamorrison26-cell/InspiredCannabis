@@ -1056,23 +1056,30 @@ def page_weekly_report(reviews_df, stores_df):
 
     today = date.today()
 
+    # ── Build available weeks (Mon-Sun) going back ~12 weeks ──
+    d = today
+    while d.weekday() != 0:        # align to Monday
+        d -= timedelta(days=1)
+    all_available_weeks = []
+    for i in range(12):
+        w_start = d - timedelta(weeks=i)
+        w_end = w_start + timedelta(days=6)
+        label = f"{w_start.strftime('%b %d')} – {w_end.strftime('%b %d')}"
+        all_available_weeks.append((label, w_start, w_end))
+    all_available_weeks.reverse()  # oldest first
+
+    default_weeks = [w[0] for w in all_available_weeks[-5:]]  # last 5 weeks
+
     # ── Filter Row ──────────────────────────────────────────────────
-    fc1, fc2, fc3, fc4 = st.columns([2.5, 2, 2, 1.5])
+    fc1, fc2, fc3, fc4 = st.columns([3, 2, 2, 1])
 
     with fc1:
-        # Date range picker
-        default_start = date(today.year, today.month, 1)
-        date_range = st.date_input(
-            "📅 Date Range",
-            value=(default_start, today),
-            min_value=date(2025, 1, 1),
-            max_value=today,
-            key="weekly_date_range"
+        selected_week_labels = st.multiselect(
+            "📅 Weeks",
+            options=[w[0] for w in all_available_weeks],
+            default=default_weeks,
+            key="weekly_week_select"
         )
-        if isinstance(date_range, tuple) and len(date_range) == 2:
-            range_start, range_end = date_range
-        else:
-            range_start, range_end = default_start, today
 
     with fc2:
         all_brands = sorted(stores_df["brand"].unique().tolist())
@@ -1084,7 +1091,6 @@ def page_weekly_report(reviews_df, stores_df):
         )
 
     with fc3:
-        # Filter stores based on selected brands
         if selected_brands_w:
             available_stores = sorted(
                 stores_df[stores_df["brand"].isin(selected_brands_w)]["store_name"].unique().tolist()
@@ -1108,22 +1114,16 @@ def page_weekly_report(reviews_df, stores_df):
             key="weekly_min_reviews"
         )
 
-    # ── Generate weekly periods (Mon-Sun) in the selected date range ──
-    weeks = []
-    d = range_start
-    # Align to Monday
-    while d.weekday() != 0:
-        d -= timedelta(days=1)
-
-    while d <= range_end:
-        w_start = d
-        w_end = d + timedelta(days=6)
-        weeks.append((w_start, w_end))
-        d += timedelta(days=7)
+    # ── Resolve selected weeks to date ranges ──
+    week_lookup = {w[0]: (w[1], w[2]) for w in all_available_weeks}
+    weeks = [week_lookup[label] for label in selected_week_labels if label in week_lookup]
 
     if not weeks:
-        st.info("No weeks in the selected date range")
+        st.info("Select at least one week to view data")
         return
+
+    range_start = min(w[0] for w in weeks)
+    range_end = max(w[1] for w in weeks)
 
     # ── Filter stores ──
     filtered_stores = stores_df.copy()
