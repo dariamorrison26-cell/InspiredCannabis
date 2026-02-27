@@ -1609,7 +1609,21 @@ def page_monthly_report(reviews_df, stores_df):
             return ""
         return f"color: {'#2E7D32' if val > 0 else '#D32F2F'}; font-weight: 700"
 
-    styled = monthly_df.style.map(style_mom, subset=["MOM Shift"])
+    # Brand-based row coloring (matching Executive Overview)
+    brand_row_colors_m = {
+        "Inspired Cannabis":    "background-color: rgba(255, 228, 196, 0.35)",
+        "Imagine Cannabis":     "background-color: rgba(200, 255, 200, 0.35)",
+        "Dutch Love":           "background-color: rgba(220, 200, 255, 0.35)",
+        "Cannabis Supply Co.":  "background-color: rgba(200, 230, 255, 0.35)",
+        "Muse Cannabis":        "background-color: rgba(255, 220, 240, 0.35)",
+    }
+
+    def color_brand_rows_m(row):
+        brand = row.get("Brand", "")
+        style = brand_row_colors_m.get(brand, "")
+        return [style] * len(row)
+
+    styled = monthly_df.style.map(style_mom, subset=["MOM Shift"]).apply(color_brand_rows_m, axis=1)
 
     st.dataframe(
         styled,
