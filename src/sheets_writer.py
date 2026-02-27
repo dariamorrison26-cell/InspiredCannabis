@@ -469,11 +469,19 @@ def populate_weekly_report_tab(
     tab_name: str = "Weekly Report"
 ) -> int:
     """
-    Populate the Weekly Report tab with per-store weekly metrics.
+    Append weekly metrics to the Weekly Report tab.
 
-    Each weekly run appends a block of data tagged with the week date range.
-    Includes Year and Month columns for easy filtering in Google Sheets.
+    On each run this function:
+      1. Creates the tab if it doesn't exist (with headers + filter)
+      2. Reads existing rows to find which week labels are already present
+      3. Skips the week if it already exists (idempotent / no duplicates)
+      4. Inserts new rows RIGHT AFTER the header (row 2) so newest data is first
+      5. Re-applies the auto-filter to cover the new data range
+
+    This approach preserves all historical backfilled data.
     """
+    from datetime import date as dt_date
+
     headers = [
         "Year", "Month", "Week", "Brand", "Store", "Current Rate",
         "# Reviews", "Avg Rating",
@@ -481,38 +489,53 @@ def populate_weekly_report_tab(
         "MTD Avg", "MTD # Reviews"
     ]
     num_cols = len(headers)  # 14
-
-    try:
-        worksheet = spreadsheet.worksheet(tab_name)
-        # Delete and recreate to ensure clean state
-        spreadsheet.del_worksheet(worksheet)
-    except gspread.WorksheetNotFound:
-        pass
-
-    worksheet = spreadsheet.add_worksheet(title=tab_name, rows=500, cols=num_cols)
+    col_letter = chr(ord('A') + num_cols - 1)  # 'N'
 
     if not report_data:
         logger.warning("No weekly report data to write")
         return 0
 
-    # Get week info from first record
+    # ── Derive the week label from report_data ──
     week_start = report_data[0].get("week_start", "")
     week_end = report_data[0].get("week_end", "")
 
-    # Derive year, month, and clean week label
-    from datetime import date as dt_date
     try:
         ws = dt_date.fromisoformat(week_start)
         we = dt_date.fromisoformat(week_end)
         year_val = we.year
-        month_val = we.strftime("%b")  # e.g. "Feb"
+        month_val = we.strftime("%b")
         week_label = f"{ws.strftime('%b %d')} – {we.strftime('%b %d')}"
     except (ValueError, TypeError):
         year_val = ""
         month_val = ""
         week_label = f"{week_start} to {week_end}"
 
-    # Build data rows for this week
+    # ── Get or create the worksheet ──
+    is_new_tab = False
+    try:
+        worksheet = spreadsheet.worksheet(tab_name)
+    except gspread.WorksheetNotFound:
+        worksheet = spreadsheet.add_worksheet(title=tab_name, rows=500, cols=num_cols)
+        is_new_tab = True
+
+    # ── Read existing data to check for duplicates ──
+    existing_weeks = set()
+    if not is_new_tab:
+        try:
+            existing_data = worksheet.get_all_values()
+            # Column C (index 2) = Week label
+            for row in existing_data[1:]:  # skip header
+                if len(row) > 2 and row[2].strip():
+                    existing_weeks.add(row[2].strip())
+        except Exception:
+            pass
+
+    # Check if this week is already in the sheet
+    if week_label in existing_weeks:
+        logger.info(f"Weekly Report: week '{week_label}' already exists — skipping (no duplicates)")
+        return 0
+
+    # ── Build new rows for this week ──
     new_rows = []
     for store in report_data:
         new_rows.append([
@@ -532,21 +555,119 @@ def populate_weekly_report_tab(
             store["mtd_count"],
         ])
 
+    if is_new_tab:
+        # Fresh tab: write headers + data
+        all_data = [headers] + new_rows
+        worksheet.update(range_name="A1", values=all_data, value_input_option="USER_ENTERED")
+
+        # Format header
+        worksheet.format(f"A1:{col_letter}1", {
+            "textFormat": {"bold": True},
+            "backgroundColor": {"red": 0.1, "green": 0.45, "blue": 0.91}
+        })
+    else:
+        # Existing tab: insert rows right after header (row 2) so newest is on top
+        # First, clear any existing basic filter (can't insert rows with filter active)
+        try:
+            worksheet.clear_basic_filter()
+        except Exception:
+            pass
+
+        # Insert blank rows at position 2 (after header)
+        worksheet.insert_rows(new_rows, row=2, value_input_option="USER_ENTERED")
+
+    # ── Re-apply auto-filter on the full range ──
+    try:
+        worksheet.clear_basic_filter()
+    except Exception:
+        pass
+
+    total_rows = worksheet.row_count
+    # Find actual last row with data
+    try:
+        all_vals = worksheet.col_values(1)  # Column A
+        actual_last = len(all_vals)
+    except Exception:
+        actual_last = total_rows
+    worksheet.set_basic_filter(f"A1:{col_letter}{actual_last}")
+
+    logger.info(f"Weekly Report: appended {len(new_rows)} rows for week '{week_label}' (total rows now: {actual_last})")
+    return len(new_rows)
+
+
+# =============================================================================
+# Monthly Report Tab
+# =============================================================================
+
+def populate_monthly_report_tab(
+    spreadsheet: gspread.Spreadsheet,
+    report_rows: list[dict],
+    tab_name: str = "Monthly Report"
+) -> int:
+    """
+    Populate the Monthly Report tab with per-store monthly metrics.
+
+    One row per store per month, with Year/Month/Brand/Store filter columns.
+    Includes 5★/1★ counts and percentages plus MOM shift.
+    """
+    headers = [
+        "Year", "Month", "Brand", "Store", "Current Rate",
+        "# Reviews", "Avg Rating",
+        "5★ Count", "5★ %", "1★ Count", "1★ %",
+        "MOM Shift"
+    ]
+    num_cols = len(headers)  # 12
+
+    # Delete and recreate for clean state (same pattern as weekly)
+    try:
+        worksheet = spreadsheet.worksheet(tab_name)
+        spreadsheet.del_worksheet(worksheet)
+    except gspread.WorksheetNotFound:
+        pass
+
+    worksheet = spreadsheet.add_worksheet(
+        title=tab_name,
+        rows=max(len(report_rows) + 10, 100),
+        cols=num_cols
+    )
+
+    if not report_rows:
+        logger.warning("No monthly report data to write")
+        return 0
+
+    # Build data rows
+    data_rows = []
+    for row in report_rows:
+        data_rows.append([
+            row["year"],
+            row["month_name"],
+            row["brand"],
+            row["store_name"],
+            row["current_rating"],
+            row["review_count"],
+            row["avg_rating"],
+            row["five_star_count"],
+            f'{row["five_star_pct"]}%' if row["five_star_pct"] else "0%",
+            row["one_star_count"],
+            f'{row["one_star_pct"]}%' if row["one_star_pct"] else "0%",
+            row["mom_shift_val"],
+        ])
+
     # Write headers + data
-    all_rows = [headers] + new_rows
+    all_rows = [headers] + data_rows
     worksheet.update(range_name="A1", values=all_rows, value_input_option="USER_ENTERED")
 
-    # Format header row
-    col_letter = chr(ord('A') + num_cols - 1)  # 'N'
+    # Format header row (blue background, bold text — matches weekly)
+    col_letter = chr(ord('A') + num_cols - 1)  # 'L'
     header_range = f"A1:{col_letter}1"
     worksheet.format(header_range, {
         "textFormat": {"bold": True},
         "backgroundColor": {"red": 0.1, "green": 0.45, "blue": 0.91}
     })
 
-    # Add auto-filter on full data range
+    # Add auto-filter on full data range (enables Year/Month/Brand/Store filtering)
     total_rows = len(all_rows)
     worksheet.set_basic_filter(f"A1:{col_letter}{total_rows}")
 
-    logger.info(f"Weekly Report: wrote {len(new_rows)} store rows for week {week_label}")
-    return len(new_rows)
+    logger.info(f"Monthly Report: wrote {len(data_rows)} rows across {tab_name}")
+    return len(data_rows)

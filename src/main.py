@@ -17,6 +17,7 @@ from . import database as db
 from .outscraper_client import OutscraperClient
 from .reports import (
     compute_monthly_report,
+    compute_monthly_report_tab,
     compute_weekly_report,
     get_all_reviews_for_tab,
     get_needs_attention_reviews,
@@ -27,6 +28,7 @@ from .sheets_writer import (
     get_sheet_client,
     open_spreadsheet,
     populate_all_reviews_tab,
+    populate_monthly_report_tab,
     populate_needs_attention_tab,
     populate_weekly_report_tab,
     update_current_ratings,
@@ -238,6 +240,37 @@ def cmd_report_weekly(args) -> None:
     logger.info("Weekly report complete — Google Sheet updated ✅")
 
 
+def cmd_report_monthly_tab(args) -> None:
+    """Generate and push the Monthly Report tab to Google Sheets."""
+    logger.info("Generating Monthly Report tab (all months, all stores)...")
+
+    report_rows = compute_monthly_report_tab()
+    logger.info(f"Computed {len(report_rows)} store-month rows")
+
+    # Write to Google Sheets
+    creds_file = os.getenv("GOOGLE_SHEETS_CREDENTIALS_FILE", ".credentials/service-account.json")
+    sheet_id = os.getenv("TARGET_SHEET_ID")
+
+    if not sheet_id:
+        logger.error("TARGET_SHEET_ID not set")
+        sys.exit(1)
+
+    client = get_sheet_client(creds_file)
+    spreadsheet = open_spreadsheet(client, sheet_id)
+
+    # Update All Reviews and Needs Attention tabs for consistency
+    all_reviews = get_all_reviews_for_tab()
+    populate_all_reviews_tab(spreadsheet, all_reviews)
+
+    needs_attention = get_needs_attention_reviews()
+    populate_needs_attention_tab(spreadsheet, needs_attention)
+
+    # Write monthly metrics to the Monthly Report tab
+    populate_monthly_report_tab(spreadsheet, report_rows)
+
+    logger.info("Monthly Report tab complete — Google Sheet updated ✅")
+
+
 def cmd_test_api(args) -> None:
     """Test Outscraper API connection with 1 store."""
     api_key = os.getenv("OUTSCRAPER_API_KEY")
@@ -369,6 +402,9 @@ def main():
     weekly_parser.add_argument("--start", type=str, help="Start date YYYY-MM-DD. Omit for auto.")
     weekly_parser.add_argument("--end", type=str, help="End date YYYY-MM-DD. Omit for auto.")
 
+    # report monthly tab
+    subparsers.add_parser("report-monthly-tab", help="Generate Monthly Report tab with all months")
+
     # test-api
     subparsers.add_parser("test-api", help="Test Outscraper API connection")
 
@@ -387,6 +423,7 @@ def main():
         "initial-load": cmd_initial_load,
         "sync": cmd_sync,
         "report-monthly": cmd_report_monthly,
+        "report-monthly-tab": cmd_report_monthly_tab,
         "report-weekly": cmd_report_weekly,
         "test-api": cmd_test_api,
         "test-sync": cmd_test_sync,

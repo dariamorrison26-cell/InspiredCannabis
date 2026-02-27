@@ -237,3 +237,67 @@ def get_needs_attention_reviews(start_date: Optional[date] = None) -> list[dict]
         "response_status": "✅ Responded" if r.get("owner_response") else "⚠️ No Response",
         "owner_response": r.get("owner_response", ""),
     } for r in reviews]
+
+
+def compute_monthly_report_tab() -> list[dict]:
+    """
+    Generate flat rows for the Monthly Report tab — one row per store per month.
+
+    Auto-discovers the date range from the earliest review in the DB through
+    the current month. Returns rows sorted most-recent-month first, then by
+    brand and store name within each month.
+    """
+    import calendar as cal_mod
+
+    stores = db.get_all_stores()
+    if not stores:
+        return []
+
+    # Find the earliest review date across all stores
+    all_reviews = db.get_reviews()
+    if not all_reviews:
+        return []
+
+    earliest = min(r["review_date"] for r in all_reviews)
+    if isinstance(earliest, str):
+        earliest = date.fromisoformat(earliest)
+
+    today = date.today()
+
+    # Build list of (year, month) pairs from earliest to current
+    year_months = []
+    y, m = earliest.year, earliest.month
+    while (y, m) <= (today.year, today.month):
+        year_months.append((y, m))
+        if m == 12:
+            y, m = y + 1, 1
+        else:
+            m += 1
+
+    # Generate rows: most recent month first
+    rows = []
+    for y, m in reversed(year_months):
+        month_name = cal_mod.month_abbr[m]  # "Jan", "Feb", etc.
+
+        for store in stores:
+            pid = store["place_id"]
+            metrics = monthly_metrics(pid, y, m)
+            shift = mom_shift(pid, y, m)
+
+            rows.append({
+                "year": y,
+                "month_num": m,
+                "month_name": month_name,
+                "brand": store["brand"],
+                "store_name": store["store_name"],
+                "current_rating": store.get("current_rating", ""),
+                "review_count": metrics["review_count"],
+                "avg_rating": metrics["avg_rating"] if metrics["review_count"] > 0 else "",
+                "five_star_count": metrics["five_star_count"],
+                "five_star_pct": metrics["five_star_pct"],
+                "one_star_count": metrics["one_star_count"],
+                "one_star_pct": metrics["one_star_pct"],
+                "mom_shift_val": shift if shift is not None else "",
+            })
+
+    return rows
