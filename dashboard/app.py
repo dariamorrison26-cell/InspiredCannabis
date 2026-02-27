@@ -1056,32 +1056,47 @@ def page_weekly_report(reviews_df, stores_df):
 
     today = date.today()
 
-    # ── Build available weeks (Mon-Sun) going back ~12 weeks ──
-    d = today
-    while d.weekday() != 0:        # align to Monday
+    # ── Build ALL available weeks (Sun-Sat) from Jan 2025 to now ──
+    d = date(2025, 1, 1)
+    while d.weekday() != 6:        # align to Sunday
         d -= timedelta(days=1)
     all_available_weeks = []
-    for i in range(12):
-        w_start = d - timedelta(weeks=i)
-        w_end = w_start + timedelta(days=6)
-        label = f"{w_start.strftime('%b %d')} – {w_end.strftime('%b %d')}"
+    while d <= today:
+        w_start = d
+        w_end = d + timedelta(days=6)
+        label = f"{w_start.strftime('%b %d')} – {w_end.strftime('%b %d, %Y')}"
         all_available_weeks.append((label, w_start, w_end))
-    all_available_weeks.reverse()  # oldest first
+        d += timedelta(days=7)
+    all_available_weeks.reverse()  # newest first
 
-    default_weeks = [w[0] for w in all_available_weeks[-5:]]  # last 5 weeks
+    # Group weeks by year for filtering
+    years_available = sorted(set(w[2].year for w in all_available_weeks), reverse=True)
 
     # ── Filter Row ──────────────────────────────────────────────────
-    fc1, fc2, fc3, fc4 = st.columns([3, 2, 2, 1])
+    fc1, fc2, fc3, fc4, fc5 = st.columns([1, 2.5, 2, 2, 1])
 
     with fc1:
+        selected_year_w = st.selectbox(
+            "📆 Year",
+            options=years_available,
+            index=0,
+            key="weekly_year_select"
+        )
+
+    with fc2:
+        # Filter weeks to selected year
+        year_weeks = [w for w in all_available_weeks if w[2].year == selected_year_w]
+        year_week_labels = [w[0] for w in year_weeks]
+        default_weeks = year_week_labels[:5]  # top 5 (newest)
+
         selected_week_labels = st.multiselect(
             "📅 Weeks",
-            options=[w[0] for w in all_available_weeks],
+            options=year_week_labels,
             default=default_weeks,
             key="weekly_week_select"
         )
 
-    with fc2:
+    with fc3:
         all_brands = sorted(stores_df["brand"].unique().tolist())
         selected_brands_w = st.multiselect(
             "🏷️ Brand",
@@ -1090,7 +1105,7 @@ def page_weekly_report(reviews_df, stores_df):
             key="weekly_brand_filter"
         )
 
-    with fc3:
+    with fc4:
         if selected_brands_w:
             available_stores = sorted(
                 stores_df[stores_df["brand"].isin(selected_brands_w)]["store_name"].unique().tolist()
@@ -1105,7 +1120,7 @@ def page_weekly_report(reviews_df, stores_df):
             key="weekly_store_filter"
         )
 
-    with fc4:
+    with fc5:
         min_reviews = st.selectbox(
             "📝 Min Reviews",
             options=[0, 1, 2, 5, 10],
