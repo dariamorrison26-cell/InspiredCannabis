@@ -146,6 +146,7 @@ def write_formulas(worksheet: gspread.Worksheet, year: int, current_month: int) 
 
     # All Reviews tab references
     ar_date = "'All Reviews'!A:A"
+    ar_brand = "'All Reviews'!B:B"
     ar_store = "'All Reviews'!C:C"
     ar_rating = "'All Reviews'!D:D"
 
@@ -159,10 +160,12 @@ def write_formulas(worksheet: gspread.Worksheet, year: int, current_month: int) 
 
     for (brand, store_name), row in STORE_ROW_MAP.items():
         store_ref = f"A{row}"  # Store name cell in Online Reviews tab
+        brand_str = f'"{brand}"'  # Brand name string for formula filtering
 
         # ── Column C: Prior year average ──
         formula_c = (
             f'=IFERROR(ROUND(AVERAGEIFS({ar_rating}, {ar_store}, {store_ref}, '
+            f'{ar_brand}, {brand_str}, '
             f'{ar_date}, ">="&DATE({prior_year},1,1), '
             f'{ar_date}, "<"&DATE({year},1,1)), 1), "")'
         )
@@ -171,6 +174,7 @@ def write_formulas(worksheet: gspread.Worksheet, year: int, current_month: int) 
         # ── Column D: YTD Average (full year) ──
         formula_d = (
             f'=IFERROR(ROUND(AVERAGEIFS({ar_rating}, {ar_store}, {store_ref}, '
+            f'{ar_brand}, {brand_str}, '
             f'{ar_date}, ">="&DATE({year},1,1), '
             f'{ar_date}, "<"&DATE({year + 1},1,1)), 1), "")'
         )
@@ -179,6 +183,7 @@ def write_formulas(worksheet: gspread.Worksheet, year: int, current_month: int) 
         # ── Column E: YTD # Reviews (full year) ──
         formula_e = (
             f'=COUNTIFS({ar_store}, {store_ref}, '
+            f'{ar_brand}, {brand_str}, '
             f'{ar_date}, ">="&DATE({year},1,1), '
             f'{ar_date}, "<"&DATE({year + 1},1,1))'
         )
@@ -197,12 +202,14 @@ def write_formulas(worksheet: gspread.Worksheet, year: int, current_month: int) 
             # Monthly review count
             formula_count = (
                 f'=COUNTIFS({ar_store}, {store_ref}, '
+                f'{ar_brand}, {brand_str}, '
                 f'{ar_date}, ">="&DATE({year},{m},1), '
                 f'{ar_date}, "<"&DATE({next_year},{next_month},1))'
             )
             # Monthly average rating (rounded to 1 decimal)
             formula_avg = (
                 f'=IFERROR(ROUND(AVERAGEIFS({ar_rating}, {ar_store}, {store_ref}, '
+                f'{ar_brand}, {brand_str}, '
                 f'{ar_date}, ">="&DATE({year},{m},1), '
                 f'{ar_date}, "<"&DATE({next_year},{next_month},1)), 1), 0)'
             )
@@ -213,6 +220,7 @@ def write_formulas(worksheet: gspread.Worksheet, year: int, current_month: int) 
         # ── Column AE: 1★ count (full year) ──
         formula_1star = (
             f'=COUNTIFS({ar_store}, {store_ref}, {ar_rating}, 1, '
+            f'{ar_brand}, {brand_str}, '
             f'{ar_date}, ">="&DATE({year},1,1), '
             f'{ar_date}, "<"&DATE({year + 1},1,1))'
         )
@@ -221,6 +229,7 @@ def write_formulas(worksheet: gspread.Worksheet, year: int, current_month: int) 
         # ── Column AG: 5★ count (full year) ──
         formula_5star = (
             f'=COUNTIFS({ar_store}, {store_ref}, {ar_rating}, 5, '
+            f'{ar_brand}, {brand_str}, '
             f'{ar_date}, ">="&DATE({year},1,1), '
             f'{ar_date}, "<"&DATE({year + 1},1,1))'
         )

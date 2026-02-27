@@ -577,9 +577,6 @@ def page_overview(reviews_df, stores_df, selected_brands):
     st.markdown('<div class="section-header">Store Performance</div>', unsafe_allow_html=True)
 
     if not filtered_stores.empty:
-        current_year = 2025  # Reporting year
-        current_month = 12   # Show all months
-        prior_year = current_year - 1
         month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
@@ -590,44 +587,34 @@ def page_overview(reviews_df, stores_df, selected_brands):
             # Current rating (from store metadata)
             cur_rating = store.get("current_rating")
 
-            # 2024 (prior year) average
-            prior_year_metrics = period_metrics(
-                pid,
-                date(prior_year, 1, 1),
-                date(prior_year, 12, 31)
-            )
-            prior_avg = prior_year_metrics["avg_rating"] if prior_year_metrics["review_count"] > 0 else None
+            # 2025 full-year metrics (summary only, no monthly breakdown)
+            y2025 = ytd_metrics(pid, 2025)
+            y2025_avg = y2025["avg_rating"] if y2025["review_count"] > 0 else None
+            y2025_total = y2025["review_count"]
 
-            # YTD metrics
-            ytd = ytd_metrics(pid, current_year)
-            ytd_avg = ytd["avg_rating"] if ytd["review_count"] > 0 else None
-            ytd_count = ytd["review_count"]
-
-            # Star distributions
-            five_star_count = ytd["five_star_count"]
-            five_star_pct = ytd["five_star_pct"]
-            one_star_count = ytd["one_star_count"]
-            one_star_pct = ytd["one_star_pct"]
+            # 2026 full-year metrics
+            y2026 = ytd_metrics(pid, 2026)
+            y2026_avg = y2026["avg_rating"] if y2026["review_count"] > 0 else None
+            y2026_total = y2026["review_count"]
 
             row_data = {
                 "Brand": store["brand"],
                 "Store": store["store_name"],
                 "Current Rate": cur_rating,
-                f"{prior_year} Avg": prior_avg,
-                "YTD Avg": ytd_avg,
-                "YTD # Reviews": ytd_count,
+                "2025 Avg": y2025_avg,
+                "2025 Total": y2025_total,
+                "2026 Avg": y2026_avg,
+                "2026 Total": y2026_total,
             }
 
-            # Monthly breakdown (# Reviews + Average Rate for each month)
-            for m in range(1, current_month + 1):
-                mm = monthly_metrics(pid, current_year, m)
-                row_data[f"{month_names[m-1]} #"] = mm["review_count"] if mm["review_count"] > 0 else 0
-                row_data[f"{month_names[m-1]} Avg"] = mm["avg_rating"] if mm["review_count"] > 0 else None
+            # 2026 monthly breakdown (counts only — no avg columns)
+            for m in range(1, 13):
+                mm = monthly_metrics(pid, 2026, m)
+                row_data[f"{month_names[m-1]} 2026"] = mm["review_count"] if mm["review_count"] > 0 else 0
 
-            row_data["1★ Count"] = one_star_count
-            row_data["1★ %"] = one_star_pct
-            row_data["5★ Count"] = five_star_count
-            row_data["5★ %"] = five_star_pct
+            # Star distributions (2026 — percentages only)
+            row_data["1★ %"] = y2026["one_star_pct"]
+            row_data["5★ %"] = y2026["five_star_pct"]
 
             perf_data.append(row_data)
 
@@ -663,8 +650,9 @@ def page_overview(reviews_df, stores_df, selected_brands):
                 "Brand": "Brand",
                 "Store": "Store",
                 "Current Rate ↓": "Current Rate",
-                "YTD Avg ↓": "YTD Avg",
-                "YTD # Reviews ↓": "YTD # Reviews",
+                "2025 Avg ↓": "2025 Avg",
+                "2026 Avg ↓": "2026 Avg",
+                "2026 Total ↓": "2026 Total",
             }
             sort_choice = st.selectbox(
                 "↕️ Sort by",
@@ -695,20 +683,69 @@ def page_overview(reviews_df, stores_df, selected_brands):
 
         st.caption(f"Showing {len(display_df)} of {len(perf_df)} stores")
 
+        # ── Column Visibility Toggles ──────────────────────────────────
+        month_names_full = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+        # Define column groups
+        col_groups = {
+            "Brand":            (["Brand"], True),
+            "Store":            (["Store"], True),
+            "Current Rate":     (["Current Rate"], True),
+            "2025 Summary":     (["2025 Avg", "2025 Total"], True),
+            "2026 Summary":     (["2026 Avg", "2026 Total"], True),
+            "2026 Monthly":     ([f"{mn} 2026" for mn in month_names_full], True),
+            "Star Distribution":(["1★ %", "5★ %"], True),
+        }
+
+        with st.expander("⚙️ Show / Hide Columns", expanded=False):
+            row1 = st.columns(len(col_groups))
+            toggles = {}
+            for i, (label, (_, default)) in enumerate(col_groups.items()):
+                with row1[i]:
+                    toggles[label] = st.checkbox(label, value=default, key=f"show_{label}")
+
+        # Build visible columns based on toggles
+        visible_cols = []
+        for label, (cols, _) in col_groups.items():
+            if toggles.get(label, True):
+                visible_cols += cols
+
+        display_df = display_df[[c for c in visible_cols if c in display_df.columns]]
+
         # Build column config
         col_config = {
             "Current Rate": st.column_config.NumberColumn(format="%.1f"),
-            f"{prior_year} Avg": st.column_config.NumberColumn(format="%.1f"),
-            "YTD Avg": st.column_config.NumberColumn(format="%.1f"),
-            "YTD # Reviews": st.column_config.NumberColumn(format="%d"),
+            "2025 Avg": st.column_config.NumberColumn(format="%.1f"),
+            "2025 Total": st.column_config.NumberColumn(format="%d"),
+            "2026 Avg": st.column_config.NumberColumn(format="%.1f"),
+            "2026 Total": st.column_config.NumberColumn(format="%d"),
             "1★ %": st.column_config.NumberColumn(format="%.1f%%"),
             "5★ %": st.column_config.NumberColumn(format="%.1f%%"),
         }
-        for m in range(1, current_month + 1):
-            col_config[f"{month_names[m-1]} Avg"] = st.column_config.NumberColumn(format="%.1f")
+
+        # ── Brand-based row coloring ──────────────────────────────────
+        brand_colors = {
+            "Inspired Cannabis":    "background-color: rgba(255, 228, 196, 0.35)",  # light peach
+            "Imagine Cannabis":     "background-color: rgba(200, 255, 200, 0.35)",  # light green
+            "Dutch Love":           "background-color: rgba(220, 200, 255, 0.35)",  # light purple
+            "Cannabis Supply Co.":  "background-color: rgba(200, 230, 255, 0.35)",  # light blue
+            "Muse Cannabis":        "background-color: rgba(255, 220, 240, 0.35)",  # light pink
+        }
+
+        # We need the Brand column in the data for styling even if hidden
+        style_df = perf_df.loc[display_df.index].copy()
+        brands_for_style = style_df["Brand"]
+
+        def color_rows(row):
+            brand = brands_for_style.get(row.name, "")
+            style = brand_colors.get(brand, "")
+            return [style] * len(row)
+
+        styled = display_df.style.apply(color_rows, axis=1)
 
         st.dataframe(
-            display_df,
+            styled,
             use_container_width=True,
             hide_index=True,
             height=600,
@@ -855,7 +892,17 @@ def page_needs_attention(reviews_df):
         rate = (responded / all_neg_count * 100) if all_neg_count > 0 else 0
         render_kpi_card("Response Rate", f"{rate:.0f}", suffix="%")
     with col3:
-        render_kpi_card("⚠️ Unresponded", unresponded_count)
+        st.markdown(f"""
+        <a href="#unresponded-reviews" style="text-decoration: none; color: inherit; display: block;">
+            <div class="kpi-card" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" 
+                 onmouseover="this.style.transform='scale(1.03)'; this.style.boxShadow='0 4px 16px rgba(211,47,47,0.3)';"
+                 onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='';">
+                <div class="kpi-label">⚠️ UNRESPONDED</div>
+                <div class="kpi-value" style="color: #D32F2F;">{unresponded_count}</div>
+                <div style="font-size: 0.7rem; color: #999; margin-top: 4px;">Click to view ↓</div>
+            </div>
+        </a>
+        """, unsafe_allow_html=True)
 
     st.markdown("")
 
@@ -886,61 +933,75 @@ def page_needs_attention(reviews_df):
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # Inline filters for the table
-    fcol1, fcol2, fcol3 = st.columns([2, 2, 2])
-    with fcol1:
-        attn_brands = sorted(working_df["brand"].unique().tolist())
-        filter_attn_brand = st.multiselect(
-            "🏷️ Filter by Brand",
-            options=attn_brands,
-            default=attn_brands,
-            key="attn_brand_filter"
-        )
-    with fcol2:
-        filter_attn_store = st.text_input(
-            "🔍 Search Store",
-            value="",
-            placeholder="Type store name...",
-            key="attn_store_search"
-        )
-    with fcol3:
-        attn_sort = st.selectbox(
-            "↕️ Sort by",
-            options=["Newest First", "Oldest First", "Brand", "Store"],
-            index=0,
-            key="attn_sort"
-        )
+    # Negative reviews by location
+    st.markdown('<div class="section-header">Negative Reviews by Location</div>', unsafe_allow_html=True)
+    loc_neg = working_df.groupby(["store_name", "brand"]).size().reset_index(name="count").sort_values("count", ascending=True)
 
-    # Apply filters
-    table_df = working_df.copy()
-    if filter_attn_brand:
-        table_df = table_df[table_df["brand"].isin(filter_attn_brand)]
-    if filter_attn_store.strip():
-        table_df = table_df[
-            table_df["store_name"].str.contains(filter_attn_store.strip(), case=False, na=False)
-        ]
+    if not loc_neg.empty:
+        fig_loc = go.Figure()
+        for _, row in loc_neg.iterrows():
+            color = BRAND_COLORS.get(row["brand"], NAVY)
+            fig_loc.add_trace(go.Bar(
+                x=[row["count"]],
+                y=[row["store_name"]],
+                orientation="h",
+                marker_color=color,
+                name=row["brand"],
+                text=[f"{row['count']}"],
+                textposition="auto",
+                showlegend=False,
+                hovertemplate=f"{row['brand']} — {row['store_name']}<br>%{{x}} reviews<extra></extra>",
+            ))
 
-    # Table
-    st.markdown('<div class="section-header">Review Details</div>', unsafe_allow_html=True)
+        chart_height = max(300, len(loc_neg) * 28)
+        fig_loc.update_layout(
+            height=chart_height,
+            margin=dict(l=0, r=20, t=10, b=0),
+            xaxis=dict(title="# Negative Reviews"),
+            yaxis=dict(title="", tickfont=dict(size=11)),
+            plot_bgcolor="white",
+            paper_bgcolor="white",
+        )
+        st.plotly_chart(fig_loc, use_container_width=True)
 
-    display_df = table_df.copy()
+    # Table with scroll anchor
+    st.markdown('<div id="unresponded-reviews" class="section-header">Review Details</div>', unsafe_allow_html=True)
+
+    display_df = working_df.sort_values("review_date", ascending=False).copy()
     display_df["Rating"] = display_df["rating"].apply(lambda r: "⭐" * int(r) if pd.notna(r) else "")
     display_df["Status"] = display_df["owner_response"].apply(
         lambda r: "✅ Responded" if pd.notna(r) and str(r).strip() else "⚠️ No Response"
     )
     display_df["Date"] = display_df["review_date"].dt.strftime("%Y-%m-%d")
 
-    # Sort
-    if attn_sort == "Newest First":
-        display_df = display_df.sort_values("review_date", ascending=False)
-    elif attn_sort == "Oldest First":
-        display_df = display_df.sort_values("review_date", ascending=True)
-    elif attn_sort == "Brand":
-        display_df = display_df.sort_values(["brand", "store_name", "review_date"], ascending=[True, True, False])
-    elif attn_sort == "Store":
-        display_df = display_df.sort_values(["store_name", "review_date"], ascending=[True, False])
+    # Column-aligned filter dropdowns
+    f1, f2, f3, f4 = st.columns([1.2, 1.5, 1.5, 1])
+    with f1:
+        display_df["_month"] = display_df["review_date"].dt.to_period("M").astype(str)
+        month_options = ["All Months"] + sorted(display_df["_month"].unique().tolist(), reverse=True)
+        sel_month = st.selectbox("Date", month_options, index=0, key="attn_date", label_visibility="collapsed")
+    with f2:
+        brand_options = ["All Brands"] + sorted(display_df["brand"].unique().tolist())
+        sel_brand = st.selectbox("Brand", brand_options, index=0, key="attn_brand2", label_visibility="collapsed")
+    with f3:
+        store_options = ["All Stores"] + sorted(display_df["store_name"].unique().tolist())
+        sel_store = st.selectbox("Store", store_options, index=0, key="attn_store2", label_visibility="collapsed")
+    with f4:
+        rating_options = ["All Ratings", "⭐", "⭐⭐"]
+        sel_rating = st.selectbox("Rating", rating_options, index=0, key="attn_rating2", label_visibility="collapsed")
 
-    display_cols = display_df[[
+    # Apply column filters
+    filtered = display_df.copy()
+    if sel_month != "All Months":
+        filtered = filtered[filtered["_month"] == sel_month]
+    if sel_brand != "All Brands":
+        filtered = filtered[filtered["brand"] == sel_brand]
+    if sel_store != "All Stores":
+        filtered = filtered[filtered["store_name"] == sel_store]
+    if sel_rating != "All Ratings":
+        filtered = filtered[filtered["Rating"] == sel_rating]
+
+    display_cols = filtered[[
         "Date", "brand", "store_name", "Rating", "review_text", "Status", "owner_response"
     ]].rename(columns={
         "brand": "Brand",
@@ -949,7 +1010,7 @@ def page_needs_attention(reviews_df):
         "owner_response": "Owner Response",
     })
 
-    st.caption(f"Showing {len(display_cols)} reviews")
+    st.caption(f"Showing {len(display_cols)} of {len(display_df)} reviews")
 
     st.dataframe(
         display_cols,
@@ -1002,7 +1063,7 @@ def main():
         page_all_reviews(filtered_reviews)
 
     with tab3:
-        page_needs_attention(filtered_reviews)
+        page_needs_attention(reviews_df)
 
 
 if __name__ == "__main__":
