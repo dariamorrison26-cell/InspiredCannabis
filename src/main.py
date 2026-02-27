@@ -28,6 +28,7 @@ from .sheets_writer import (
     open_spreadsheet,
     populate_all_reviews_tab,
     populate_needs_attention_tab,
+    populate_weekly_report_tab,
     update_current_ratings,
     write_formulas,
 )
@@ -171,8 +172,13 @@ def cmd_report_monthly(args) -> None:
     client = get_sheet_client(creds_file)
     spreadsheet = open_spreadsheet(client, sheet_id)
 
-    # Update Online Reviews tab
-    online_reviews = spreadsheet.worksheet("Online Reviews")
+    # Update Online Reviews tab (year-specific)
+    tab_name = f"Online Reviews {year}"
+    try:
+        online_reviews = spreadsheet.worksheet(tab_name)
+    except Exception:
+        # Fallback to generic name
+        online_reviews = spreadsheet.worksheet("Online Reviews")
     build_store_row_map(online_reviews)
 
     # Write current ratings (plain values from Outscraper)
@@ -224,6 +230,10 @@ def cmd_report_weekly(args) -> None:
 
     needs_attention = get_needs_attention_reviews()
     populate_needs_attention_tab(spreadsheet, needs_attention)
+
+    # Write weekly metrics to the Weekly Report tab
+    above_pct = pct_above_threshold(4.5)
+    populate_weekly_report_tab(spreadsheet, report, above_pct)
 
     logger.info("Weekly report complete — Google Sheet updated ✅")
 

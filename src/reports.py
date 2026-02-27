@@ -172,14 +172,18 @@ def compute_weekly_report(week_start: date, week_end: date) -> list[dict]:
     """
     Generate a weekly report for all stores.
 
-    Returns a list of dicts with weekly metrics per store.
+    Returns a list of dicts with weekly + MTD metrics per store.
     """
     stores = db.get_all_stores()
     report = []
 
+    # MTD: from 1st of week_end's month to week_end
+    mtd_start = date(week_end.year, week_end.month, 1)
+
     for store in stores:
         pid = store["place_id"]
         weekly = period_metrics(pid, week_start, week_end)
+        mtd = period_metrics(pid, mtd_start, week_end)
 
         report.append({
             "place_id": pid,
@@ -189,7 +193,13 @@ def compute_weekly_report(week_start: date, week_end: date) -> list[dict]:
             "week_count": weekly["review_count"],
             "week_avg": weekly["avg_rating"],
             "week_five_star_count": weekly["five_star_count"],
+            "week_five_star_pct": weekly["five_star_pct"],
             "week_one_star_count": weekly["one_star_count"],
+            "week_one_star_pct": weekly["one_star_pct"],
+            "mtd_avg": mtd["avg_rating"],
+            "mtd_count": mtd["review_count"],
+            "week_start": week_start.isoformat(),
+            "week_end": week_end.isoformat(),
         })
 
     return report

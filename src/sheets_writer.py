@@ -130,15 +130,16 @@ def write_formulas(worksheet: gspread.Worksheet, year: int, current_month: int) 
     All formulas reference the 'All Reviews' tab where:
         Column A = Date, B = Brand, C = Store, D = Rating
 
-    Uses date range criteria (">="&DATE(...), "<"&DATE(...)) because
-    Google Sheets COUNTIFS/AVERAGEIFS don't support YEAR()/MONTH() on ranges.
-
     Columns written:
+        B  = Current Rate (plain value, handled by update_current_ratings)
         C  = Prior year average (AVERAGEIFS)
         D  = YTD average (AVERAGEIFS for full year)
         E  = YTD # Reviews (COUNTIFS for full year)
-        F-AC = Monthly count + avg per month
-        AE = 1★ count, AG = 5★ count
+        F-AC = Monthly count + avg per month (2 cols × 12 months)
+        AD = MOM shift (current month avg - prior month avg)
+        AE = 1★ YTD count, AF = 1★ YTD %
+        AG = 5★ YTD count, AH = 5★ YTD %
+        AI-BH = Monthly 5★ count, 5★ %, 1★ count, 1★ % (4 cols × 12 months)
     """
     prior_year = year - 1
     updated = 0
@@ -150,12 +151,29 @@ def write_formulas(worksheet: gspread.Worksheet, year: int, current_month: int) 
     ar_store = "'All Reviews'!C:C"
     ar_rating = "'All Reviews'!D:D"
 
-    # Month column mapping
+    # Month column mapping: (count_col, avg_col)
     month_cols = {
         1:  ("F", "G"),   2:  ("H", "I"),   3:  ("J", "K"),
         4:  ("L", "M"),   5:  ("N", "O"),   6:  ("P", "Q"),
         7:  ("R", "S"),   8:  ("T", "U"),   9:  ("V", "W"),
         10: ("X", "Y"),   11: ("Z", "AA"),  12: ("AB", "AC"),
+    }
+
+    # Monthly star breakdown columns: (5★ count, 5★ %, 1★ count, 1★ %)
+    # AI through BH = 48 columns (4 per month × 12 months)
+    star_month_cols = {
+        1:  ("AI", "AJ", "AK", "AL"),
+        2:  ("AM", "AN", "AO", "AP"),
+        3:  ("AQ", "AR", "AS", "AT"),
+        4:  ("AU", "AV", "AW", "AX"),
+        5:  ("AY", "AZ", "BA", "BB"),
+        6:  ("BC", "BD", "BE", "BF"),
+        7:  ("BG", "BH", "BI", "BJ"),
+        8:  ("BK", "BL", "BM", "BN"),
+        9:  ("BO", "BP", "BQ", "BR"),
+        10: ("BS", "BT", "BU", "BV"),
+        11: ("BW", "BX", "BY", "BZ"),
+        12: ("CA", "CB", "CC", "CD"),
     }
 
     for (brand, store_name), row in STORE_ROW_MAP.items():
@@ -217,7 +235,19 @@ def write_formulas(worksheet: gspread.Worksheet, year: int, current_month: int) 
             batch_updates.append({"range": f"{count_col}{row}", "values": [[formula_count]]})
             batch_updates.append({"range": f"{avg_col}{row}", "values": [[formula_avg]]})
 
-        # ── Column AE: 1★ count (full year) ──
+        # ── Column AD: MOM Shift ──
+        # Current month avg - prior month avg
+        if current_month == 1:
+            # Jan: compare to Dec of prior year (use prior year avg as fallback)
+            curr_avg_col = month_cols[1][1]  # G (Jan avg)
+            formula_mom = f'=IFERROR({curr_avg_col}{row}-C{row}, "")'
+        else:
+            curr_avg_col = month_cols[current_month][1]
+            prior_avg_col = month_cols[current_month - 1][1]
+            formula_mom = f'=IFERROR({curr_avg_col}{row}-{prior_avg_col}{row}, "")'
+        batch_updates.append({"range": f"AD{row}", "values": [[formula_mom]]})
+
+        # ── Column AE: 1★ YTD count ──
         formula_1star = (
             f'=COUNTIFS({ar_store}, {store_ref}, {ar_rating}, 1, '
             f'{ar_brand}, {brand_str}, '
@@ -226,7 +256,11 @@ def write_formulas(worksheet: gspread.Worksheet, year: int, current_month: int) 
         )
         batch_updates.append({"range": f"AE{row}", "values": [[formula_1star]]})
 
-        # ── Column AG: 5★ count (full year) ──
+        # ── Column AF: 1★ YTD % ──
+        formula_1star_pct = f'=IFERROR(ROUND(AE{row}/E{row}*100, 1), 0)'
+        batch_updates.append({"range": f"AF{row}", "values": [[formula_1star_pct]]})
+
+        # ── Column AG: 5★ YTD count ──
         formula_5star = (
             f'=COUNTIFS({ar_store}, {store_ref}, {ar_rating}, 5, '
             f'{ar_brand}, {brand_str}, '
@@ -235,7 +269,63 @@ def write_formulas(worksheet: gspread.Worksheet, year: int, current_month: int) 
         )
         batch_updates.append({"range": f"AG{row}", "values": [[formula_5star]]})
 
+        # ── Column AH: 5★ YTD % ──
+        formula_5star_pct = f'=IFERROR(ROUND(AG{row}/E{row}*100, 1), 0)'
+        batch_updates.append({"range": f"AH{row}", "values": [[formula_5star_pct]]})
+
+        # ── Columns AI-CD: Monthly 5★/1★ count + % per month ──
+        for m in range(1, 13):
+            five_cnt_col, five_pct_col, one_cnt_col, one_pct_col = star_month_cols[m]
+            count_col = month_cols[m][0]  # Monthly total count column
+
+            # Date range for this month
+            if m == 12:
+                next_year, next_month = year + 1, 1
+            else:
+                next_year, next_month = year, m + 1
+
+            # Monthly 5★ count
+            formula_5cnt = (
+                f'=COUNTIFS({ar_store}, {store_ref}, {ar_rating}, 5, '
+                f'{ar_brand}, {brand_str}, '
+                f'{ar_date}, ">="&DATE({year},{m},1), '
+                f'{ar_date}, "<"&DATE({next_year},{next_month},1))'
+            )
+            batch_updates.append({"range": f"{five_cnt_col}{row}", "values": [[formula_5cnt]]})
+
+            # Monthly 5★ %
+            formula_5pct = f'=IFERROR(ROUND({five_cnt_col}{row}/{count_col}{row}*100, 1), 0)'
+            batch_updates.append({"range": f"{five_pct_col}{row}", "values": [[formula_5pct]]})
+
+            # Monthly 1★ count
+            formula_1cnt = (
+                f'=COUNTIFS({ar_store}, {store_ref}, {ar_rating}, 1, '
+                f'{ar_brand}, {brand_str}, '
+                f'{ar_date}, ">="&DATE({year},{m},1), '
+                f'{ar_date}, "<"&DATE({next_year},{next_month},1))'
+            )
+            batch_updates.append({"range": f"{one_cnt_col}{row}", "values": [[formula_1cnt]]})
+
+            # Monthly 1★ %
+            formula_1pct = f'=IFERROR(ROUND({one_cnt_col}{row}/{count_col}{row}*100, 1), 0)'
+            batch_updates.append({"range": f"{one_pct_col}{row}", "values": [[formula_1pct]]})
+
         updated += 1
+
+    # ── Write % above 4.5 to a summary cell ──
+    # Find a safe row for the summary (row 2 is typically a sub-header)
+    # Use cell B2 for the percentage value
+    total_stores = len(STORE_ROW_MAP)
+    if total_stores > 0:
+        # Count stores where B column (current rate) >= 4.5
+        store_rows = list(STORE_ROW_MAP.values())
+        min_row = min(store_rows)
+        max_row = max(store_rows)
+        formula_pct = (
+            f'=ROUND(COUNTIF(B{min_row}:B{max_row},">="&4.5)'
+            f'/COUNTA(B{min_row}:B{max_row})*100, 1)&"% above 4.5"'
+        )
+        batch_updates.append({"range": "AD2", "values": [[formula_pct]]})
 
     if batch_updates:
         # Use USER_ENTERED so Google Sheets interprets formulas
@@ -366,3 +456,97 @@ def populate_needs_attention_tab(
 
     logger.info(f"Populated '{tab_name}' with {len(reviews)} negative reviews")
     return len(reviews)
+
+
+# =============================================================================
+# Weekly Report Tab
+# =============================================================================
+
+def populate_weekly_report_tab(
+    spreadsheet: gspread.Spreadsheet,
+    report_data: list[dict],
+    pct_above: float,
+    tab_name: str = "Weekly Report"
+) -> int:
+    """
+    Populate the Weekly Report tab with per-store weekly metrics.
+
+    Each weekly run appends a block of data tagged with the week date range.
+    Includes Year and Month columns for easy filtering in Google Sheets.
+    """
+    headers = [
+        "Year", "Month", "Week", "Brand", "Store", "Current Rate",
+        "# Reviews", "Avg Rating",
+        "5★ Count", "5★ %", "1★ Count", "1★ %",
+        "MTD Avg", "MTD # Reviews"
+    ]
+    num_cols = len(headers)  # 14
+
+    try:
+        worksheet = spreadsheet.worksheet(tab_name)
+        # Delete and recreate to ensure clean state
+        spreadsheet.del_worksheet(worksheet)
+    except gspread.WorksheetNotFound:
+        pass
+
+    worksheet = spreadsheet.add_worksheet(title=tab_name, rows=500, cols=num_cols)
+
+    if not report_data:
+        logger.warning("No weekly report data to write")
+        return 0
+
+    # Get week info from first record
+    week_start = report_data[0].get("week_start", "")
+    week_end = report_data[0].get("week_end", "")
+
+    # Derive year, month, and clean week label
+    from datetime import date as dt_date
+    try:
+        ws = dt_date.fromisoformat(week_start)
+        we = dt_date.fromisoformat(week_end)
+        year_val = we.year
+        month_val = we.strftime("%b")  # e.g. "Feb"
+        week_label = f"{ws.strftime('%b %d')} – {we.strftime('%b %d')}"
+    except (ValueError, TypeError):
+        year_val = ""
+        month_val = ""
+        week_label = f"{week_start} to {week_end}"
+
+    # Build data rows for this week
+    new_rows = []
+    for store in report_data:
+        new_rows.append([
+            year_val,
+            month_val,
+            week_label,
+            store["brand"],
+            store["store_name"],
+            store.get("current_rating", ""),
+            store["week_count"],
+            store["week_avg"],
+            store["week_five_star_count"],
+            f'{store["week_five_star_pct"]}%',
+            store["week_one_star_count"],
+            f'{store["week_one_star_pct"]}%',
+            store["mtd_avg"],
+            store["mtd_count"],
+        ])
+
+    # Write headers + data
+    all_rows = [headers] + new_rows
+    worksheet.update(range_name="A1", values=all_rows, value_input_option="USER_ENTERED")
+
+    # Format header row
+    col_letter = chr(ord('A') + num_cols - 1)  # 'N'
+    header_range = f"A1:{col_letter}1"
+    worksheet.format(header_range, {
+        "textFormat": {"bold": True},
+        "backgroundColor": {"red": 0.1, "green": 0.45, "blue": 0.91}
+    })
+
+    # Add auto-filter on full data range
+    total_rows = len(all_rows)
+    worksheet.set_basic_filter(f"A1:{col_letter}{total_rows}")
+
+    logger.info(f"Weekly Report: wrote {len(new_rows)} store rows for week {week_label}")
+    return len(new_rows)

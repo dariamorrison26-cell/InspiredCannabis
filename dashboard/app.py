@@ -7,6 +7,7 @@ Reads from the same SQLite DB as the Google Sheets pipeline.
 
 import base64
 import sys
+from calendar import monthrange
 from pathlib import Path
 
 # Add project root to path so we can import src modules
@@ -18,13 +19,13 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 from datetime import date, timedelta
-from calendar import monthrange
 
 from src import database as db
 from src.reports import (
     period_metrics,
     ytd_metrics,
     monthly_metrics,
+    mom_shift,
     pct_above_threshold,
 )
 
@@ -611,10 +612,19 @@ def page_overview(reviews_df, stores_df, selected_brands):
             for m in range(1, 13):
                 mm = monthly_metrics(pid, 2026, m)
                 row_data[f"{month_names[m-1]} 2026"] = mm["review_count"] if mm["review_count"] > 0 else 0
+                # Monthly 5★/1★ breakdown
+                row_data[f"{month_names[m-1]} 5★#"] = mm["five_star_count"]
+                row_data[f"{month_names[m-1]} 5★%"] = mm["five_star_pct"]
+                row_data[f"{month_names[m-1]} 1★#"] = mm["one_star_count"]
+                row_data[f"{month_names[m-1]} 1★%"] = mm["one_star_pct"]
 
             # Star distributions (2026 — percentages only)
             row_data["1★ %"] = y2026["one_star_pct"]
             row_data["5★ %"] = y2026["five_star_pct"]
+
+            # MOM shift (latest month with data)
+            shift = mom_shift(pid, 2026, max(1, min(date.today().month, 12)))
+            row_data["MOM Shift"] = shift if shift is not None else 0.0
 
             perf_data.append(row_data)
 
@@ -692,10 +702,12 @@ def page_overview(reviews_df, stores_df, selected_brands):
             "Brand":            (["Brand"], True),
             "Store":            (["Store"], True),
             "Current Rate":     (["Current Rate"], True),
+            "MOM Shift":        (["MOM Shift"], True),
             "2025 Summary":     (["2025 Avg", "2025 Total"], True),
             "2026 Summary":     (["2026 Avg", "2026 Total"], True),
             "2026 Monthly":     ([f"{mn} 2026" for mn in month_names_full], True),
             "Star Distribution":(["1★ %", "5★ %"], True),
+            "Monthly Stars":    ([f"{mn} {s}" for mn in month_names_full for s in ["5★#", "5★%", "1★#", "1★%"]], False),
         }
 
         with st.expander("⚙️ Show / Hide Columns", expanded=False):
@@ -716,6 +728,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
         # Build column config
         col_config = {
             "Current Rate": st.column_config.NumberColumn(format="%.1f"),
+            "MOM Shift": st.column_config.NumberColumn(format="%+.2f"),
             "2025 Avg": st.column_config.NumberColumn(format="%.1f"),
             "2025 Total": st.column_config.NumberColumn(format="%d"),
             "2026 Avg": st.column_config.NumberColumn(format="%.1f"),
@@ -723,6 +736,10 @@ def page_overview(reviews_df, stores_df, selected_brands):
             "1★ %": st.column_config.NumberColumn(format="%.1f%%"),
             "5★ %": st.column_config.NumberColumn(format="%.1f%%"),
         }
+        # Add star columns config
+        for mn in month_names_full:
+            col_config[f"{mn} 5★%"] = st.column_config.NumberColumn(format="%.1f%%")
+            col_config[f"{mn} 1★%"] = st.column_config.NumberColumn(format="%.1f%%")
 
         # ── Brand-based row coloring ──────────────────────────────────
         brand_colors = {
@@ -1038,6 +1055,323 @@ def page_needs_attention(reviews_df):
 # Main App
 # =============================================================================
 
+def page_weekly_report(reviews_df, stores_df):
+    """Render the Weekly Report page."""
+    st.markdown('<div class="section-header">Weekly Report</div>', unsafe_allow_html=True)
+
+    from src.reports import period_metrics, pct_above_threshold
+
+    today = date.today()
+
+    # ── Filter Row ──────────────────────────────────────────────────
+    fc1, fc2, fc3, fc4 = st.columns([2.5, 2, 2, 1.5])
+
+    with fc1:
+        # Date range picker
+        default_start = date(today.year, today.month, 1)
+        date_range = st.date_input(
+            "📅 Date Range",
+            value=(default_start, today),
+            min_value=date(2025, 1, 1),
+            max_value=today,
+            key="weekly_date_range"
+        )
+        if isinstance(date_range, tuple) and len(date_range) == 2:
+            range_start, range_end = date_range
+        else:
+            range_start, range_end = default_start, today
+
+    with fc2:
+        all_brands = sorted(stores_df["brand"].unique().tolist())
+        selected_brands_w = st.multiselect(
+            "🏷️ Brand",
+            options=all_brands,
+            default=all_brands,
+            key="weekly_brand_filter"
+        )
+
+    with fc3:
+        # Filter stores based on selected brands
+        if selected_brands_w:
+            available_stores = sorted(
+                stores_df[stores_df["brand"].isin(selected_brands_w)]["store_name"].unique().tolist()
+            )
+        else:
+            available_stores = sorted(stores_df["store_name"].unique().tolist())
+
+        selected_stores = st.multiselect(
+            "🏪 Store",
+            options=available_stores,
+            default=available_stores,
+            key="weekly_store_filter"
+        )
+
+    with fc4:
+        min_reviews = st.selectbox(
+            "📝 Min Reviews",
+            options=[0, 1, 2, 5, 10],
+            index=0,
+            format_func=lambda x: "All" if x == 0 else f"≥ {x}",
+            key="weekly_min_reviews"
+        )
+
+    # ── Generate weekly periods (Mon-Sun) in the selected date range ──
+    weeks = []
+    d = range_start
+    # Align to Monday
+    while d.weekday() != 0:
+        d -= timedelta(days=1)
+
+    while d <= range_end:
+        w_start = d
+        w_end = d + timedelta(days=6)
+        weeks.append((w_start, w_end))
+        d += timedelta(days=7)
+
+    if not weeks:
+        st.info("No weeks in the selected date range")
+        return
+
+    # ── Filter stores ──
+    filtered_stores = stores_df.copy()
+    if selected_brands_w:
+        filtered_stores = filtered_stores[filtered_stores["brand"].isin(selected_brands_w)]
+    if selected_stores:
+        filtered_stores = filtered_stores[filtered_stores["store_name"].isin(selected_stores)]
+
+    # ── Build weekly data ──
+    mtd_start = date(range_end.year, range_end.month, 1)
+    all_weekly_data = []
+
+    for w_start, w_end in weeks:
+        week_label = f"{w_start.strftime('%b %d')} – {w_end.strftime('%b %d')}"
+
+        for _, store in filtered_stores.iterrows():
+            pid = store["place_id"]
+            weekly = period_metrics(pid, w_start, w_end)
+            mtd = period_metrics(pid, mtd_start, range_end)
+
+            all_weekly_data.append({
+                "Week": week_label,
+                "Brand": store["brand"],
+                "Store": store["store_name"],
+                "Current Rate": store.get("current_rating"),
+                "# Reviews": weekly["review_count"],
+                "Avg Rating": weekly["avg_rating"],
+                "5★ Count": weekly["five_star_count"],
+                "5★ %": weekly["five_star_pct"],
+                "1★ Count": weekly["one_star_count"],
+                "1★ %": weekly["one_star_pct"],
+                "MTD Avg": mtd["avg_rating"],
+                "MTD Reviews": mtd["review_count"],
+            })
+
+    if not all_weekly_data:
+        st.info("No data for the selected filters")
+        return
+
+    weekly_df = pd.DataFrame(all_weekly_data)
+
+    # Apply min reviews filter
+    if min_reviews > 0:
+        weekly_df = weekly_df[weekly_df["# Reviews"] >= min_reviews]
+
+    # ── KPI Cards ──
+    above_pct = pct_above_threshold(4.5)
+    total_reviews = weekly_df["# Reviews"].sum()
+    avg_rating = weekly_df.loc[weekly_df["# Reviews"] > 0, "Avg Rating"].mean()
+    stores_shown = weekly_df[["Brand", "Store"]].drop_duplicates().shape[0]
+
+    kc1, kc2, kc3, kc4 = st.columns(4)
+    with kc1:
+        render_kpi_card("Total Reviews", int(total_reviews))
+    with kc2:
+        render_kpi_card("Avg Rating", f"{avg_rating:.2f}" if pd.notna(avg_rating) else "—")
+    with kc3:
+        render_kpi_card("% Above 4.5", f"{above_pct}%")
+    with kc4:
+        render_kpi_card("Stores", stores_shown)
+
+    # ── Results summary ──
+    st.caption(f"Showing {len(weekly_df)} rows • {len(weeks)} weeks • {stores_shown} stores")
+
+    # ── Data Table ──
+    col_config = {
+        "Current Rate": st.column_config.NumberColumn(format="%.1f"),
+        "Avg Rating": st.column_config.NumberColumn(format="%.2f"),
+        "5★ %": st.column_config.NumberColumn(format="%.1f%%"),
+        "1★ %": st.column_config.NumberColumn(format="%.1f%%"),
+        "MTD Avg": st.column_config.NumberColumn(format="%.2f"),
+    }
+
+    st.dataframe(
+        weekly_df,
+        use_container_width=True,
+        hide_index=True,
+        height=600,
+        column_config=col_config,
+    )
+
+    # CSV Export
+    csv = weekly_df.to_csv(index=False)
+    st.download_button(
+        label="📥 Export Weekly Data",
+        data=csv,
+        file_name=f"weekly_report_{range_start}_{range_end}.csv",
+        mime="text/csv",
+        key="weekly_export"
+    )
+
+
+# =============================================================================
+# Page: Monthly Report
+# =============================================================================
+
+def page_monthly_report(reviews_df, stores_df):
+    """Render the Monthly Report page — focused single-month view."""
+    st.markdown('<div class="section-header">Monthly Report</div>', unsafe_allow_html=True)
+
+    today = date.today()
+    month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+    # ── Filter Row ──────────────────────────────────────────────────
+    fc1, fc2, fc3, fc4 = st.columns([1, 1, 2, 2])
+
+    with fc1:
+        selected_year = st.selectbox(
+            "📆 Year",
+            options=[2025, 2026],
+            index=1,
+            key="monthly_year"
+        )
+
+    with fc2:
+        current_month_idx = today.month - 1 if selected_year == today.year else 0
+        selected_month = st.selectbox(
+            "📅 Month",
+            options=list(range(1, 13)),
+            index=current_month_idx,
+            format_func=lambda m: month_names[m - 1],
+            key="monthly_month"
+        )
+
+    with fc3:
+        all_brands = sorted(stores_df["brand"].unique().tolist())
+        selected_brands_m = st.multiselect(
+            "🏷️ Brand",
+            options=all_brands,
+            default=all_brands,
+            key="monthly_brand_filter"
+        )
+
+    with fc4:
+        if selected_brands_m:
+            available_stores = sorted(
+                stores_df[stores_df["brand"].isin(selected_brands_m)]["store_name"].unique().tolist()
+            )
+        else:
+            available_stores = sorted(stores_df["store_name"].unique().tolist())
+
+        selected_stores_m = st.multiselect(
+            "🏪 Store",
+            options=available_stores,
+            default=available_stores,
+            key="monthly_store_filter"
+        )
+
+    # ── Filter stores ──
+    filtered = stores_df.copy()
+    if selected_brands_m:
+        filtered = filtered[filtered["brand"].isin(selected_brands_m)]
+    if selected_stores_m:
+        filtered = filtered[filtered["store_name"].isin(selected_stores_m)]
+
+    if filtered.empty:
+        st.info("No stores match the selected filters")
+        return
+
+    # ── Build monthly data ──
+    rows = []
+    for _, store in filtered.iterrows():
+        pid = store["place_id"]
+        mm = monthly_metrics(pid, selected_year, selected_month)
+        shift = mom_shift(pid, selected_year, selected_month)
+
+        rows.append({
+            "Brand": store["brand"],
+            "Store": store["store_name"],
+            "Current Rate": store.get("current_rating"),
+            "# Reviews": mm["review_count"],
+            "Avg Rating": mm["avg_rating"],
+            "5★ Count": mm["five_star_count"],
+            "5★ %": mm["five_star_pct"],
+            "1★ Count": mm["one_star_count"],
+            "1★ %": mm["one_star_pct"],
+            "MOM Shift": shift if shift is not None else 0.0,
+        })
+
+    monthly_df = pd.DataFrame(rows)
+
+    # ── KPI Cards ──
+    total_reviews = monthly_df["# Reviews"].sum()
+    stores_with_reviews = monthly_df[monthly_df["# Reviews"] > 0]
+    avg_rating = stores_with_reviews["Avg Rating"].mean() if not stores_with_reviews.empty else None
+    above_45 = (monthly_df["Current Rate"].dropna() >= 4.5).sum()
+    above_45_pct = round(above_45 / len(monthly_df) * 100, 1) if len(monthly_df) > 0 else 0
+    avg_mom = monthly_df["MOM Shift"].mean()
+
+    month_label = f"{month_names[selected_month - 1]} {selected_year}"
+
+    kc1, kc2, kc3, kc4 = st.columns(4)
+    with kc1:
+        render_kpi_card(f"Reviews in {month_label}", int(total_reviews))
+    with kc2:
+        render_kpi_card("Avg Rating", f"{avg_rating:.2f}" if pd.notna(avg_rating) else "—")
+    with kc3:
+        render_kpi_card("% Above 4.5", f"{above_45_pct}%")
+    with kc4:
+        delta_class = "positive" if avg_mom >= 0 else "negative"
+        render_kpi_card("Avg MOM Shift", f"{avg_mom:+.2f}")
+
+    st.caption(f"Showing {len(monthly_df)} stores for {month_label}")
+
+    # ── Data Table with color-coded MOM Shift ──
+    col_config = {
+        "Current Rate": st.column_config.NumberColumn(format="%.1f"),
+        "Avg Rating": st.column_config.NumberColumn(format="%.2f"),
+        "5★ %": st.column_config.NumberColumn(format="%.1f%%"),
+        "1★ %": st.column_config.NumberColumn(format="%.1f%%"),
+        "MOM Shift": st.column_config.NumberColumn(format="%+.2f"),
+    }
+
+    # Color MOM Shift: green = positive, red = negative
+    def style_mom(val):
+        if pd.isna(val) or val == 0:
+            return ""
+        return f"color: {'#2E7D32' if val > 0 else '#D32F2F'}; font-weight: 700"
+
+    styled = monthly_df.style.map(style_mom, subset=["MOM Shift"])
+
+    st.dataframe(
+        styled,
+        use_container_width=True,
+        hide_index=True,
+        height=600,
+        column_config=col_config,
+    )
+
+    # CSV Export
+    csv = monthly_df.to_csv(index=False)
+    st.download_button(
+        label="📥 Export Monthly Data",
+        data=csv,
+        file_name=f"monthly_report_{month_label.replace(' ', '_')}.csv",
+        mime="text/csv",
+        key="monthly_export"
+    )
+
+
 def main():
     # Sidebar filters
     selected_brands, date_range, min_rating, search_term = render_sidebar()
@@ -1050,8 +1384,10 @@ def main():
     filtered_reviews = apply_filters(reviews_df, selected_brands, date_range, min_rating, search_term)
 
     # Navigation tabs
-    tab1, tab2, tab3 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📊 Executive Overview",
+        "📅 Weekly Report",
+        "📈 Monthly Report",
         "📝 All Reviews",
         "🚨 Needs Attention"
     ])
@@ -1060,9 +1396,15 @@ def main():
         page_overview(filtered_reviews, stores_df, selected_brands)
 
     with tab2:
-        page_all_reviews(filtered_reviews)
+        page_weekly_report(filtered_reviews, stores_df)
 
     with tab3:
+        page_monthly_report(filtered_reviews, stores_df)
+
+    with tab4:
+        page_all_reviews(filtered_reviews)
+
+    with tab5:
         page_needs_attention(reviews_df)
 
 
