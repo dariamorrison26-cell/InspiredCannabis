@@ -1304,7 +1304,7 @@ def page_weekly_report(reviews_df, stores_df):
     # ── Results summary ──
     st.caption(f"Showing {len(weekly_df)} rows • {len(weeks)} weeks • {stores_shown} stores")
 
-    # ── Data Table ──
+    # ── Data Table with brand row coloring ──
     col_config = {
         "Current Rate": st.column_config.NumberColumn(format="%.1f"),
         "Avg Rating": st.column_config.NumberColumn(format="%.2f"),
@@ -1313,8 +1313,23 @@ def page_weekly_report(reviews_df, stores_df):
         "MTD Avg": st.column_config.NumberColumn(format="%.2f"),
     }
 
+    brand_row_colors = {
+        "Inspired Cannabis":    "background-color: rgba(255, 228, 196, 0.35)",  # light peach
+        "Imagine Cannabis":     "background-color: rgba(200, 255, 200, 0.35)",  # light green
+        "Dutch Love":           "background-color: rgba(220, 200, 255, 0.35)",  # light purple
+        "Cannabis Supply Co.":  "background-color: rgba(200, 230, 255, 0.35)",  # light blue
+        "Muse Cannabis":        "background-color: rgba(255, 220, 240, 0.35)",  # light pink
+    }
+
+    def color_brand_rows(row):
+        brand = row.get("Brand", "")
+        style = brand_row_colors.get(brand, "")
+        return [style] * len(row)
+
+    styled_weekly = weekly_df.style.apply(color_brand_rows, axis=1)
+
     st.dataframe(
-        weekly_df,
+        styled_weekly,
         use_container_width=True,
         hide_index=True,
         height=400,
