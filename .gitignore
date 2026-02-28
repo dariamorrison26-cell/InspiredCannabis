@@ -8,6 +8,12 @@ data/
 
 # Temporary files
 .tmp/
+~$*
+
+# Client documents (keep out of repo)
+*.pdf
+*.docx
+*.html
 
 # Python
 __pycache__/
