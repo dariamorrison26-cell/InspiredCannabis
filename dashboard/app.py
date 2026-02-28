@@ -59,15 +59,11 @@ BRAND_COLORS = {
     "Muse Cannabis": "#C44536",
 }
 
-# Initialize mobile mode state BEFORE page config
-if "mobile_mode" not in st.session_state:
-    st.session_state.mobile_mode = False
-
 st.set_page_config(
     page_title="Cannabis Reviews Dashboard",
     page_icon="🌿",
     layout="wide",
-    initial_sidebar_state="collapsed" if st.session_state.mobile_mode else "expanded"
+    initial_sidebar_state="expanded"
 )
 
 # =============================================================================
@@ -208,54 +204,8 @@ st.markdown(f"""
     #MainMenu {{ visibility: hidden; }}
     footer {{ visibility: hidden; }}
     header {{ visibility: hidden; }}
-
-    /* ── Mobile Mode Styles ── */
-    .mobile-active .dashboard-header {{
-        padding: 0.4rem 0.8rem;
-        flex-direction: column;
-        text-align: center;
-        gap: 4px;
-    }}
-    .mobile-active .dashboard-header h1 {{
-        font-size: 1rem;
-    }}
-    .mobile-active .dashboard-header .subtitle {{
-        font-size: 0.65rem;
-    }}
-    .mobile-active .kpi-card {{
-        padding: 0.35rem 0.5rem;
-    }}
-    .mobile-active .kpi-value {{
-        font-size: 1.15rem;
-    }}
-    .mobile-active .kpi-label {{
-        font-size: 0.55rem;
-    }}
-    .mobile-active .section-header {{
-        font-size: 0.95rem;
-        margin: 1rem 0 0.5rem 0;
-    }}
-    .mobile-active .stTabs [data-baseweb="tab"] {{
-        padding: 6px 12px;
-        font-size: 0.75rem;
-    }}
 </style>
 """, unsafe_allow_html=True)
-
-# Inject mobile class on body if mobile mode is active
-if st.session_state.mobile_mode:
-    st.markdown('<style>.stApp { } </style><script></script>', unsafe_allow_html=True)
-    st.markdown("""
-    <style>
-        .stApp { }
-        .element-container, .stMarkdown, .stTabs, [data-testid="stVerticalBlock"] { }
-    </style>
-    <script>
-        // Add mobile-active class to root
-        const app = window.parent.document.querySelector('.stApp');
-        if (app) app.classList.add('mobile-active');
-    </script>
-    """, unsafe_allow_html=True)
 
 
 # =============================================================================
@@ -300,22 +250,6 @@ def get_stores_df():
 # Sidebar Filters
 # =============================================================================
 
-def is_mobile():
-    """Check if mobile mode is active."""
-    return st.session_state.get("mobile_mode", False)
-
-
-def adaptive_cols(desktop_spec, mobile_spec=1):
-    """Return st.columns with desktop or mobile spec based on toggle.
-    
-    desktop_spec: int or list (original desktop layout)
-    mobile_spec: int or list (mobile layout, default=1 for stacked)
-    """
-    if is_mobile():
-        return st.columns(mobile_spec)
-    return st.columns(desktop_spec)
-
-
 def render_sidebar():
     """Render the sidebar with filters."""
     with st.sidebar:
@@ -339,16 +273,6 @@ def render_sidebar():
             </div>
             """, unsafe_allow_html=True)
         st.markdown("---")
-
-        # Mobile View Toggle
-        mobile = st.toggle(
-            "📱 Mobile View",
-            value=st.session_state.mobile_mode,
-            key="mobile_toggle"
-        )
-        if mobile != st.session_state.mobile_mode:
-            st.session_state.mobile_mode = mobile
-            st.rerun()
 
         # Refresh button
         if st.button("🔄 Refresh Data", use_container_width=True, key="refresh_btn"):
@@ -484,7 +408,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
     responded = len(reviews_df[reviews_df["owner_response"].notna() & (reviews_df["owner_response"] != "")]) if not reviews_df.empty else 0
     response_pct = (responded / total_reviews * 100) if total_reviews > 0 else 0
 
-    cols = adaptive_cols(6, 3)
+    cols = st.columns(6)
     with cols[0]:
         render_kpi_card("Total Stores", total_stores)
     with cols[1]:
@@ -501,7 +425,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
     st.markdown("")
 
     # ── Charts Row 1 ──────────────────────────────────────────────────────
-    chart_col1, chart_col2 = adaptive_cols(2, 1)
+    chart_col1, chart_col2 = st.columns(2)
 
     with chart_col1:
         st.markdown('<div class="section-header">Average Rating by Brand</div>', unsafe_allow_html=True)
@@ -564,7 +488,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
             st.info("No review data available")
 
     # ── Charts Row 2 ──────────────────────────────────────────────────────
-    chart_col3, chart_col4 = adaptive_cols(2, 1)
+    chart_col3, chart_col4 = st.columns(2)
 
     with chart_col3:
         st.markdown('<div class="section-header">Star Distribution</div>', unsafe_allow_html=True)
@@ -700,7 +624,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
         perf_df = pd.DataFrame(perf_data)
 
         # ── Inline Filters Above Table ──────────────────────────────────
-        fcol1, fcol2, fcol3, fcol4 = adaptive_cols([2, 2, 1.5, 1.5], [1, 1])
+        fcol1, fcol2, fcol3, fcol4 = st.columns([2, 2, 1.5, 1.5])
         with fcol1:
             table_brands = sorted(perf_df["Brand"].unique().tolist())
             filter_brand = st.multiselect(
@@ -780,7 +704,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
         }
 
         with st.expander("⚙️ Show / Hide Columns", expanded=False):
-            row1 = adaptive_cols(len(col_groups), 2)
+            row1 = st.columns(len(col_groups))
             toggles = {}
             for i, (label, (_, default)) in enumerate(col_groups.items()):
                 with row1[i]:
@@ -896,7 +820,7 @@ def page_all_reviews(reviews_df):
     })
 
     # Quick stats row
-    col1, col2, col3, col4 = adaptive_cols(4, 2)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         render_kpi_card("Total Reviews", len(display_df))
     with col2:
@@ -970,7 +894,7 @@ def page_needs_attention(reviews_df):
     working_df = negative_df if show_all else unresponded_df
 
     # Quick stats
-    col1, col2, col3 = adaptive_cols(3, 1)
+    col1, col2, col3 = st.columns(3)
     with col1:
         render_kpi_card("Total Negative", all_neg_count)
     with col2:
@@ -1061,7 +985,7 @@ def page_needs_attention(reviews_df):
     display_df["Date"] = display_df["review_date"].dt.strftime("%Y-%m-%d")
 
     # Column-aligned filter dropdowns
-    f1, f2, f3, f4 = adaptive_cols([1.2, 1.5, 1.5, 1], [1, 1])
+    f1, f2, f3, f4 = st.columns([1.2, 1.5, 1.5, 1])
     with f1:
         display_df["_month"] = display_df["review_date"].dt.to_period("M").astype(str)
         month_options = ["All Months"] + sorted(display_df["_month"].unique().tolist(), reverse=True)
@@ -1149,73 +1073,61 @@ def page_weekly_report(reviews_df, stores_df):
     years_available = sorted(set(w[2].year for w in all_available_weeks), reverse=True)
 
     # ── Filter Row ──────────────────────────────────────────────────
-    if is_mobile():
-        # Mobile: stack filters vertically
+    fc1, fc2, fc3, fc4, fc5 = st.columns([1, 2.5, 2, 2, 1])
+
+    with fc1:
         selected_year_w = st.selectbox(
-            "📆 Year", options=years_available, index=0, key="weekly_year_select"
+            "📆 Year",
+            options=years_available,
+            index=0,
+            key="weekly_year_select"
         )
+
+    with fc2:
+        # Filter weeks to selected year
         year_weeks = [w for w in all_available_weeks if w[2].year == selected_year_w]
         year_week_labels = [w[0] for w in year_weeks]
-        default_weeks = year_week_labels[:5]
+        default_weeks = year_week_labels[:5]  # top 5 (newest)
+
         selected_week_labels = st.multiselect(
-            "📅 Weeks", options=year_week_labels, default=default_weeks, key="weekly_week_select"
+            "📅 Weeks",
+            options=year_week_labels,
+            default=default_weeks,
+            key="weekly_week_select"
         )
+
+    with fc3:
         all_brands = sorted(stores_df["brand"].unique().tolist())
         selected_brands_w = st.multiselect(
-            "🏷️ Brand", options=all_brands, default=all_brands, key="weekly_brand_filter"
+            "🏷️ Brand",
+            options=all_brands,
+            default=all_brands,
+            key="weekly_brand_filter"
         )
+
+    with fc4:
         if selected_brands_w:
             available_stores = sorted(
                 stores_df[stores_df["brand"].isin(selected_brands_w)]["store_name"].unique().tolist()
             )
         else:
             available_stores = sorted(stores_df["store_name"].unique().tolist())
+
         selected_stores = st.multiselect(
-            "🏪 Store", options=available_stores, default=available_stores, key="weekly_store_filter"
+            "🏪 Store",
+            options=available_stores,
+            default=available_stores,
+            key="weekly_store_filter"
         )
+
+    with fc5:
         min_reviews = st.selectbox(
-            "📝 Min Reviews", options=[0, 1, 2, 3, 5], index=0,
-            format_func=lambda x: "All" if x == 0 else f"≥ {x} reviews", key="weekly_min_reviews"
+            "📝 Min Reviews",
+            options=[0, 1, 2, 3, 5],
+            index=0,
+            format_func=lambda x: "All" if x == 0 else f"≥ {x} reviews",
+            key="weekly_min_reviews"
         )
-    else:
-        # Desktop: original 5-column row
-        fc1, fc2, fc3, fc4, fc5 = st.columns([1, 2.5, 2, 2, 1])
-
-        with fc1:
-            selected_year_w = st.selectbox(
-                "📆 Year", options=years_available, index=0, key="weekly_year_select"
-            )
-
-        with fc2:
-            year_weeks = [w for w in all_available_weeks if w[2].year == selected_year_w]
-            year_week_labels = [w[0] for w in year_weeks]
-            default_weeks = year_week_labels[:5]
-            selected_week_labels = st.multiselect(
-                "📅 Weeks", options=year_week_labels, default=default_weeks, key="weekly_week_select"
-            )
-
-        with fc3:
-            all_brands = sorted(stores_df["brand"].unique().tolist())
-            selected_brands_w = st.multiselect(
-                "🏷️ Brand", options=all_brands, default=all_brands, key="weekly_brand_filter"
-            )
-
-        with fc4:
-            if selected_brands_w:
-                available_stores = sorted(
-                    stores_df[stores_df["brand"].isin(selected_brands_w)]["store_name"].unique().tolist()
-                )
-            else:
-                available_stores = sorted(stores_df["store_name"].unique().tolist())
-            selected_stores = st.multiselect(
-                "🏪 Store", options=available_stores, default=available_stores, key="weekly_store_filter"
-            )
-
-        with fc5:
-            min_reviews = st.selectbox(
-                "📝 Min Reviews", options=[0, 1, 2, 3, 5], index=0,
-                format_func=lambda x: "All" if x == 0 else f"≥ {x} reviews", key="weekly_min_reviews"
-            )
 
     # ── Resolve selected weeks to date ranges ──
     week_lookup = {w[0]: (w[1], w[2]) for w in all_available_weeks}
@@ -1278,7 +1190,7 @@ def page_weekly_report(reviews_df, stores_df):
     avg_rating = weekly_df.loc[weekly_df["# Reviews"] > 0, "Avg Rating"].mean()
     stores_shown = weekly_df[["Brand", "Store"]].drop_duplicates().shape[0]
 
-    kc1, kc2, kc3, kc4 = adaptive_cols(4, 2)
+    kc1, kc2, kc3, kc4 = st.columns(4)
     with kc1:
         render_kpi_card("Total Reviews", int(total_reviews))
     with kc2:
@@ -1316,7 +1228,7 @@ def page_weekly_report(reviews_df, stores_df):
         "1★ Count": "sum",
     }).reset_index()
 
-    ch1, ch2 = adaptive_cols(2, 1)
+    ch1, ch2 = st.columns(2)
 
     with ch1:
         # Chart 1: Weekly Review Volume
@@ -1353,7 +1265,7 @@ def page_weekly_report(reviews_df, stores_df):
         fig2.update_yaxes(gridcolor=grid_c, title_text="Avg Rating", range=[1, 5.2])
         st.plotly_chart(fig2, use_container_width=True)
 
-    ch3, ch4 = adaptive_cols(2, 1)
+    ch3, ch4 = st.columns(2)
 
     with ch3:
         # Chart 3: Brand Comparison
@@ -1463,61 +1375,49 @@ def page_monthly_report(reviews_df, stores_df):
                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
     # ── Filter Row ──────────────────────────────────────────────────
-    if is_mobile():
-        # Mobile: stack filters vertically
+    fc1, fc2, fc3, fc4 = st.columns([1, 1, 2, 2])
+
+    with fc1:
         selected_year = st.selectbox(
-            "📆 Year", options=[2025, 2026], index=1, key="monthly_year"
+            "📆 Year",
+            options=[2025, 2026],
+            index=1,
+            key="monthly_year"
         )
+
+    with fc2:
         current_month_idx = today.month - 1 if selected_year == today.year else 0
         selected_month = st.selectbox(
-            "📅 Month", options=list(range(1, 13)), index=current_month_idx,
-            format_func=lambda m: month_names[m - 1], key="monthly_month"
+            "📅 Month",
+            options=list(range(1, 13)),
+            index=current_month_idx,
+            format_func=lambda m: month_names[m - 1],
+            key="monthly_month"
         )
+
+    with fc3:
         all_brands = sorted(stores_df["brand"].unique().tolist())
         selected_brands_m = st.multiselect(
-            "🏷️ Brand", options=all_brands, default=all_brands, key="monthly_brand_filter"
+            "🏷️ Brand",
+            options=all_brands,
+            default=all_brands,
+            key="monthly_brand_filter"
         )
+
+    with fc4:
         if selected_brands_m:
             available_stores = sorted(
                 stores_df[stores_df["brand"].isin(selected_brands_m)]["store_name"].unique().tolist()
             )
         else:
             available_stores = sorted(stores_df["store_name"].unique().tolist())
+
         selected_stores_m = st.multiselect(
-            "🏪 Store", options=available_stores, default=available_stores, key="monthly_store_filter"
+            "🏪 Store",
+            options=available_stores,
+            default=available_stores,
+            key="monthly_store_filter"
         )
-    else:
-        # Desktop: original 4-column row
-        fc1, fc2, fc3, fc4 = st.columns([1, 1, 2, 2])
-
-        with fc1:
-            selected_year = st.selectbox(
-                "📆 Year", options=[2025, 2026], index=1, key="monthly_year"
-            )
-
-        with fc2:
-            current_month_idx = today.month - 1 if selected_year == today.year else 0
-            selected_month = st.selectbox(
-                "📅 Month", options=list(range(1, 13)), index=current_month_idx,
-                format_func=lambda m: month_names[m - 1], key="monthly_month"
-            )
-
-        with fc3:
-            all_brands = sorted(stores_df["brand"].unique().tolist())
-            selected_brands_m = st.multiselect(
-                "🏷️ Brand", options=all_brands, default=all_brands, key="monthly_brand_filter"
-            )
-
-        with fc4:
-            if selected_brands_m:
-                available_stores = sorted(
-                    stores_df[stores_df["brand"].isin(selected_brands_m)]["store_name"].unique().tolist()
-                )
-            else:
-                available_stores = sorted(stores_df["store_name"].unique().tolist())
-            selected_stores_m = st.multiselect(
-                "🏪 Store", options=available_stores, default=available_stores, key="monthly_store_filter"
-            )
 
     # ── Filter stores ──
     filtered = stores_df.copy()
@@ -1562,7 +1462,7 @@ def page_monthly_report(reviews_df, stores_df):
 
     month_label = f"{month_names[selected_month - 1]} {selected_year}"
 
-    kc1, kc2, kc3, kc4 = adaptive_cols(4, 2)
+    kc1, kc2, kc3, kc4 = st.columns(4)
     with kc1:
         render_kpi_card(f"Reviews in {month_label}", int(total_reviews))
     with kc2:
@@ -1611,7 +1511,7 @@ def page_monthly_report(reviews_df, stores_df):
         "# Reviews": "sum", "5★ Count": "sum", "1★ Count": "sum",
     }).reset_index()
 
-    ch1, ch2 = adaptive_cols(2, 1)
+    ch1, ch2 = st.columns(2)
 
     with ch1:
         # Chart 1: Monthly Review Volume (blue vertical bars)
@@ -1649,7 +1549,7 @@ def page_monthly_report(reviews_df, stores_df):
         fig2.update_yaxes(gridcolor=grid_cm, title_text="Avg Rating", range=[1, 5.2])
         st.plotly_chart(fig2, use_container_width=True)
 
-    ch3, ch4 = adaptive_cols(2, 1)
+    ch3, ch4 = st.columns(2)
 
     with ch3:
         # Chart 3: Brand 5★ vs 1★ (grouped bar)
