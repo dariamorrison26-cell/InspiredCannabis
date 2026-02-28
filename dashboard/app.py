@@ -1123,9 +1123,9 @@ def page_weekly_report(reviews_df, stores_df):
     with fc5:
         min_reviews = st.selectbox(
             "📝 Min Reviews",
-            options=[0, 1, 2, 5, 10],
+            options=[0, 1, 2, 3, 5],
             index=0,
-            format_func=lambda x: "All" if x == 0 else f"≥ {x}",
+            format_func=lambda x: "All" if x == 0 else f"≥ {x} reviews",
             key="weekly_min_reviews"
         )
 
