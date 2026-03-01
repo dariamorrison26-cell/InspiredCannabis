@@ -198,6 +198,7 @@ def compute_weekly_report(week_start: date, week_end: date) -> list[dict]:
             "week_one_star_pct": weekly["one_star_pct"],
             "mtd_avg": mtd["avg_rating"],
             "mtd_count": mtd["review_count"],
+            "week_vs_mtd_avg": round(weekly["avg_rating"] - mtd["avg_rating"], 2) if weekly["review_count"] > 0 and mtd["review_count"] > 0 else 0.0,
             "week_start": week_start.isoformat(),
             "week_end": week_end.isoformat(),
         })
