@@ -680,6 +680,38 @@ def populate_monthly_report_tab(
     ]
     num_cols = len(headers)  # 12
 
+    # Description row — plain-language explanation for each column
+    descriptions = [
+        "Year of the reporting month",
+        "Month name",
+        "Store brand name",
+        "Store location name",
+        "Current live Google rating for this store",
+        "Total reviews received this month",
+        "Average star rating of reviews this month",
+        "Number of 5-star reviews this month",
+        "Percentage of this month's reviews that were 5-star",
+        "Number of 1-star reviews this month",
+        "Percentage of this month's reviews that were 1-star",
+        "Month-over-month rating shift vs previous month",
+    ]
+
+    # Formula row — exact calculation for each metric
+    formulas = [
+        "—",
+        "—",
+        "—",
+        "—",
+        "From Google Business Profile",
+        "COUNT(reviews where date is within this month)",
+        "SUM(ratings this month) / # Reviews this month",
+        "COUNT(reviews this month where rating = 5)",
+        "(5★ Count / # Reviews) × 100",
+        "COUNT(reviews this month where rating = 1)",
+        "(1★ Count / # Reviews) × 100",
+        "This month's Avg Rating − previous month's Avg Rating",
+    ]
+
     # Delete and recreate for clean state (same pattern as weekly)
     try:
         worksheet = spreadsheet.worksheet(tab_name)
@@ -715,21 +747,38 @@ def populate_monthly_report_tab(
             row["mom_shift_val"],
         ])
 
-    # Write headers + data
-    all_rows = [headers] + data_rows
+    # Write description + formulas + headers + data
+    all_rows = [descriptions, formulas, headers] + data_rows
     worksheet.update(range_name="A1", values=all_rows, value_input_option="USER_ENTERED")
 
-    # Format header row (blue background, bold text — matches weekly)
     col_letter = chr(ord('A') + num_cols - 1)  # 'L'
-    header_range = f"A1:{col_letter}1"
-    worksheet.format(header_range, {
+
+    # Format description row (Row 1) — italic, gray background, wrap text
+    worksheet.format(f"A1:{col_letter}1", {
+        "textFormat": {"italic": True, "fontSize": 9, "foregroundColorStyle": {"rgbColor": {"red": 0.4, "green": 0.4, "blue": 0.4}}},
+        "backgroundColor": {"red": 0.95, "green": 0.95, "blue": 0.95},
+        "wrapStrategy": "WRAP"
+    })
+
+    # Format formula row (Row 2) — light yellow, blue text, wrap text
+    worksheet.format(f"A2:{col_letter}2", {
+        "textFormat": {"fontSize": 9, "foregroundColorStyle": {"rgbColor": {"red": 0.2, "green": 0.2, "blue": 0.6}}},
+        "backgroundColor": {"red": 1.0, "green": 0.98, "blue": 0.88},
+        "wrapStrategy": "WRAP"
+    })
+
+    # Format header row (Row 3) — bold, blue background
+    worksheet.format(f"A3:{col_letter}3", {
         "textFormat": {"bold": True},
         "backgroundColor": {"red": 0.1, "green": 0.45, "blue": 0.91}
     })
 
-    # Add auto-filter on full data range (enables Year/Month/Brand/Store filtering)
+    # Freeze first 3 rows (description + formula + header)
+    worksheet.freeze(rows=3)
+
+    # Add auto-filter on header row (Row 3)
     total_rows = len(all_rows)
-    worksheet.set_basic_filter(f"A1:{col_letter}{total_rows}")
+    worksheet.set_basic_filter(f"A3:{col_letter}{total_rows}")
 
     logger.info(f"Monthly Report: wrote {len(data_rows)} rows across {tab_name}")
     return len(data_rows)
