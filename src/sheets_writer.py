@@ -519,13 +519,34 @@ def populate_weekly_report_tab(
         worksheet = spreadsheet.add_worksheet(title=tab_name, rows=500, cols=num_cols)
         is_new_tab = True
 
+    # Description row — plain-language explanation for each column
+    descriptions = [
+        "Year of the reporting week",
+        "Month of the reporting week",
+        "Date range (Sun–Sat) for this reporting week",
+        "Store brand name",
+        "Store location name",
+        "Current live Google rating for this store",
+        "Total reviews received THIS WEEK only",
+        "Average star rating of reviews THIS WEEK",
+        "Number of 5-star reviews this week",
+        "Percentage of this week's reviews that were 5-star",
+        "Number of 1-star reviews this week",
+        "Percentage of this week's reviews that were 1-star",
+        "Average rating for the entire month so far (1st of month to end of week)",
+        "Total reviews for the entire month so far",
+        "Week Avg Rating minus MTD Avg Rating. Positive = week outperformed the month",
+        "Average number of reviews per week this month",
+        "This week's review count minus the monthly weekly average. Positive = above average",
+    ]
+
     # ── Read existing data to check for duplicates ──
     existing_weeks = set()
     if not is_new_tab:
         try:
             existing_data = worksheet.get_all_values()
-            # Column C (index 2) = Week label
-            for row in existing_data[1:]:  # skip header
+            # Column C (index 2) = Week label; skip description row (0) + header row (1)
+            for row in existing_data[2:]:
                 if len(row) > 2 and row[2].strip():
                     existing_weeks.add(row[2].strip())
         except Exception:
@@ -560,27 +581,37 @@ def populate_weekly_report_tab(
         ])
 
     if is_new_tab:
-        # Fresh tab: write headers + data
-        all_data = [headers] + new_rows
+        # Fresh tab: write description + headers + data
+        all_data = [descriptions, headers] + new_rows
         worksheet.update(range_name="A1", values=all_data, value_input_option="USER_ENTERED")
 
-        # Format header
+        # Format description row (Row 1)
         worksheet.format(f"A1:{col_letter}1", {
+            "textFormat": {"italic": True, "fontSize": 9, "foregroundColorStyle": {"rgbColor": {"red": 0.4, "green": 0.4, "blue": 0.4}}},
+            "backgroundColor": {"red": 0.95, "green": 0.95, "blue": 0.95},
+            "wrapStrategy": "WRAP"
+        })
+
+        # Format header row (Row 2)
+        worksheet.format(f"A2:{col_letter}2", {
             "textFormat": {"bold": True},
             "backgroundColor": {"red": 0.1, "green": 0.45, "blue": 0.91}
         })
+
+        # Freeze first 2 rows
+        worksheet.freeze(rows=2)
     else:
-        # Existing tab: insert rows right after header (row 2) so newest is on top
+        # Existing tab: insert rows right after description + header (row 3)
         # First, clear any existing basic filter (can't insert rows with filter active)
         try:
             worksheet.clear_basic_filter()
         except Exception:
             pass
 
-        # Insert blank rows at position 2 (after header)
-        worksheet.insert_rows(new_rows, row=2, value_input_option="USER_ENTERED")
+        # Insert new rows at position 3 (after description + header)
+        worksheet.insert_rows(new_rows, row=3, value_input_option="USER_ENTERED")
 
-    # ── Re-apply auto-filter on the full range ──
+    # ── Re-apply auto-filter on the full range (starting at header row 2) ──
     try:
         worksheet.clear_basic_filter()
     except Exception:
@@ -593,7 +624,7 @@ def populate_weekly_report_tab(
         actual_last = len(all_vals)
     except Exception:
         actual_last = total_rows
-    worksheet.set_basic_filter(f"A1:{col_letter}{actual_last}")
+    worksheet.set_basic_filter(f"A2:{col_letter}{actual_last}")
 
     logger.info(f"Weekly Report: appended {len(new_rows)} rows for week '{week_label}' (total rows now: {actual_last})")
     return len(new_rows)
