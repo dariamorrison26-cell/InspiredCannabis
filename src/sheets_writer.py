@@ -540,7 +540,8 @@ def populate_weekly_report_tab(
         "This week's review count minus the monthly weekly average. Positive = above average",
     ]
 
-    # Formula row — exact calculation for each metric
+    # Formula row — actual Google Sheets formulas referencing 'All Reviews' tab
+    # All Reviews columns: A=Date, B=Brand, C=Store, D=Rating
     formulas = [
         "—",
         "—",
@@ -548,16 +549,16 @@ def populate_weekly_report_tab(
         "—",
         "—",
         "From Google Business Profile",
-        "COUNT(reviews where date is within this week)",
-        "SUM(ratings this week) / # Reviews this week",
-        "COUNT(reviews this week where rating = 5)",
-        "(5★ Count / # Reviews) × 100",
-        "COUNT(reviews this week where rating = 1)",
-        "(1★ Count / # Reviews) × 100",
-        "SUM(all ratings from 1st of month to week end) / COUNT(all reviews in that range)",
-        "COUNT(all reviews from 1st of month to week end)",
+        "COUNTIFS('All Reviews'!C:C, Store, 'All Reviews'!A:A, \">=\"&WeekStart, 'All Reviews'!A:A, \"<=\"&WeekEnd)",
+        "AVERAGEIFS('All Reviews'!D:D, 'All Reviews'!C:C, Store, 'All Reviews'!A:A, \">=\"&WeekStart, 'All Reviews'!A:A, \"<=\"&WeekEnd)",
+        "COUNTIFS('All Reviews'!C:C, Store, 'All Reviews'!A:A, \">=\"&WeekStart, 'All Reviews'!A:A, \"<=\"&WeekEnd, 'All Reviews'!D:D, 5)",
+        "5★ Count / # Reviews * 100",
+        "COUNTIFS('All Reviews'!C:C, Store, 'All Reviews'!A:A, \">=\"&WeekStart, 'All Reviews'!A:A, \"<=\"&WeekEnd, 'All Reviews'!D:D, 1)",
+        "1★ Count / # Reviews * 100",
+        "AVERAGEIFS('All Reviews'!D:D, 'All Reviews'!C:C, Store, 'All Reviews'!A:A, \">=\"&MonthStart, 'All Reviews'!A:A, \"<=\"&WeekEnd)",
+        "COUNTIFS('All Reviews'!C:C, Store, 'All Reviews'!A:A, \">=\"&MonthStart, 'All Reviews'!A:A, \"<=\"&WeekEnd)",
         "Avg Rating − MTD Avg",
-        "MTD # Reviews / weeks elapsed in month so far",
+        "MTD # Reviews / (DAYS(WeekEnd, MonthStart)+1) / 7",
         "# Reviews − MTD Avg/Wk",
     ]
 
@@ -697,19 +698,21 @@ def populate_monthly_report_tab(
     ]
 
     # Formula row — exact calculation for each metric
+    # Formula row — actual Google Sheets formulas referencing 'All Reviews' tab
+    # All Reviews columns: A=Date, B=Brand, C=Store, D=Rating
     formulas = [
         "—",
         "—",
         "—",
         "—",
         "From Google Business Profile",
-        "COUNT(reviews where date is within this month)",
-        "SUM(ratings this month) / # Reviews this month",
-        "COUNT(reviews this month where rating = 5)",
-        "(5★ Count / # Reviews) × 100",
-        "COUNT(reviews this month where rating = 1)",
-        "(1★ Count / # Reviews) × 100",
-        "This month's Avg Rating − previous month's Avg Rating",
+        "COUNTIFS('All Reviews'!C:C, Store, 'All Reviews'!A:A, \">=\"&MonthStart, 'All Reviews'!A:A, \"<=\"&MonthEnd)",
+        "AVERAGEIFS('All Reviews'!D:D, 'All Reviews'!C:C, Store, 'All Reviews'!A:A, \">=\"&MonthStart, 'All Reviews'!A:A, \"<=\"&MonthEnd)",
+        "COUNTIFS('All Reviews'!C:C, Store, 'All Reviews'!A:A, \">=\"&MonthStart, 'All Reviews'!A:A, \"<=\"&MonthEnd, 'All Reviews'!D:D, 5)",
+        "5★ Count / # Reviews * 100",
+        "COUNTIFS('All Reviews'!C:C, Store, 'All Reviews'!A:A, \">=\"&MonthStart, 'All Reviews'!A:A, \"<=\"&MonthEnd, 'All Reviews'!D:D, 1)",
+        "1★ Count / # Reviews * 100",
+        "This Month Avg Rating − Prior Month Avg Rating",
     ]
 
     # Delete and recreate for clean state (same pattern as weekly)
