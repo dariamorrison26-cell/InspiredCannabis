@@ -486,10 +486,11 @@ def populate_weekly_report_tab(
         "Year", "Month", "Week", "Brand", "Store", "Current Rate",
         "# Reviews", "Avg Rating",
         "5★ Count", "5★ %", "1★ Count", "1★ %",
-        "MTD Avg", "MTD # Reviews", "Wk vs MTD Δ"
+        "MTD Avg", "MTD # Reviews", "Wk vs MTD Δ",
+        "MTD Avg/Wk", "Wk vs MTD Reviews Δ"
     ]
-    num_cols = len(headers)  # 15
-    col_letter = chr(ord('A') + num_cols - 1)  # 'O'
+    num_cols = len(headers)  # 17
+    col_letter = chr(ord('A') + num_cols - 1)  # 'Q'
 
     if not report_data:
         logger.warning("No weekly report data to write")
@@ -554,6 +555,8 @@ def populate_weekly_report_tab(
             store["mtd_avg"],
             store["mtd_count"],
             store.get("week_vs_mtd_avg", 0.0),
+            store.get("mtd_weekly_avg_count", 0.0),
+            store.get("week_vs_mtd_count", 0.0),
         ])
 
     if is_new_tab:

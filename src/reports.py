@@ -180,10 +180,17 @@ def compute_weekly_report(week_start: date, week_end: date) -> list[dict]:
     # MTD: from 1st of week_end's month to week_end
     mtd_start = date(week_end.year, week_end.month, 1)
 
+    # Calculate weeks elapsed in month (for weekly average comparison)
+    days_in_month_so_far = (week_end - mtd_start).days + 1
+    weeks_elapsed = max(1, days_in_month_so_far / 7)
+
     for store in stores:
         pid = store["place_id"]
         weekly = period_metrics(pid, week_start, week_end)
         mtd = period_metrics(pid, mtd_start, week_end)
+
+        # MTD average reviews per week
+        mtd_weekly_avg = round(mtd["review_count"] / weeks_elapsed, 1) if mtd["review_count"] > 0 else 0.0
 
         report.append({
             "place_id": pid,
@@ -199,6 +206,8 @@ def compute_weekly_report(week_start: date, week_end: date) -> list[dict]:
             "mtd_avg": mtd["avg_rating"],
             "mtd_count": mtd["review_count"],
             "week_vs_mtd_avg": round(weekly["avg_rating"] - mtd["avg_rating"], 2) if weekly["review_count"] > 0 and mtd["review_count"] > 0 else 0.0,
+            "mtd_weekly_avg_count": mtd_weekly_avg,
+            "week_vs_mtd_count": round(weekly["review_count"] - mtd_weekly_avg, 1) if weekly["review_count"] > 0 else 0.0,
             "week_start": week_start.isoformat(),
             "week_end": week_end.isoformat(),
         })

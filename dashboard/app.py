@@ -1159,6 +1159,11 @@ def page_weekly_report(reviews_df, stores_df):
             weekly = period_metrics(pid, w_start, w_end)
             mtd = period_metrics(pid, mtd_start, range_end)
 
+            # MTD average reviews per week
+            days_in_month = (range_end - mtd_start).days + 1
+            weeks_elapsed = max(1, days_in_month / 7)
+            mtd_weekly_avg = round(mtd["review_count"] / weeks_elapsed, 1) if mtd["review_count"] > 0 else 0.0
+
             all_weekly_data.append({
                 "Week": week_label,
                 "Brand": store["brand"],
@@ -1173,6 +1178,8 @@ def page_weekly_report(reviews_df, stores_df):
                 "MTD Avg": mtd["avg_rating"],
                 "MTD Reviews": mtd["review_count"],
                 "Wk vs MTD Δ": round(weekly["avg_rating"] - mtd["avg_rating"], 2) if weekly["review_count"] > 0 and mtd["review_count"] > 0 else 0.0,
+                "MTD Avg/Wk": mtd_weekly_avg,
+                "Wk vs MTD Reviews Δ": round(weekly["review_count"] - mtd_weekly_avg, 1) if weekly["review_count"] > 0 else 0.0,
             })
 
     if not all_weekly_data:
