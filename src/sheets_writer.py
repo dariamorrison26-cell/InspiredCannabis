@@ -540,13 +540,34 @@ def populate_weekly_report_tab(
         "This week's review count minus the monthly weekly average. Positive = above average",
     ]
 
+    # Formula row — exact calculation for each metric
+    formulas = [
+        "—",
+        "—",
+        "—",
+        "—",
+        "—",
+        "From Google Business Profile",
+        "COUNT(reviews where date is within this week)",
+        "SUM(ratings this week) / # Reviews this week",
+        "COUNT(reviews this week where rating = 5)",
+        "(5★ Count / # Reviews) × 100",
+        "COUNT(reviews this week where rating = 1)",
+        "(1★ Count / # Reviews) × 100",
+        "SUM(all ratings from 1st of month to week end) / COUNT(all reviews in that range)",
+        "COUNT(all reviews from 1st of month to week end)",
+        "Avg Rating (col H) − MTD Avg (col M)",
+        "MTD # Reviews (col N) / weeks elapsed in month so far",
+        "# Reviews (col G) − MTD Avg/Wk (col P)",
+    ]
+
     # ── Read existing data to check for duplicates ──
     existing_weeks = set()
     if not is_new_tab:
         try:
             existing_data = worksheet.get_all_values()
-            # Column C (index 2) = Week label; skip description row (0) + header row (1)
-            for row in existing_data[2:]:
+            # Column C (index 2) = Week label; skip description(0) + formula(1) + header(2)
+            for row in existing_data[3:]:
                 if len(row) > 2 and row[2].strip():
                     existing_weeks.add(row[2].strip())
         except Exception:
@@ -581,8 +602,8 @@ def populate_weekly_report_tab(
         ])
 
     if is_new_tab:
-        # Fresh tab: write description + headers + data
-        all_data = [descriptions, headers] + new_rows
+        # Fresh tab: write description + formulas + headers + data
+        all_data = [descriptions, formulas, headers] + new_rows
         worksheet.update(range_name="A1", values=all_data, value_input_option="USER_ENTERED")
 
         # Format description row (Row 1)
@@ -592,26 +613,32 @@ def populate_weekly_report_tab(
             "wrapStrategy": "WRAP"
         })
 
-        # Format header row (Row 2)
+        # Format formula row (Row 2) — light yellow, blue text
         worksheet.format(f"A2:{col_letter}2", {
+            "textFormat": {"fontSize": 9, "foregroundColorStyle": {"rgbColor": {"red": 0.2, "green": 0.2, "blue": 0.6}}},
+            "backgroundColor": {"red": 1.0, "green": 0.98, "blue": 0.88},
+            "wrapStrategy": "WRAP"
+        })
+
+        # Format header row (Row 3)
+        worksheet.format(f"A3:{col_letter}3", {
             "textFormat": {"bold": True},
             "backgroundColor": {"red": 0.1, "green": 0.45, "blue": 0.91}
         })
 
-        # Freeze first 2 rows
-        worksheet.freeze(rows=2)
+        # Freeze first 3 rows
+        worksheet.freeze(rows=3)
     else:
-        # Existing tab: insert rows right after description + header (row 3)
-        # First, clear any existing basic filter (can't insert rows with filter active)
+        # Existing tab: insert rows right after description + formula + header (row 4)
         try:
             worksheet.clear_basic_filter()
         except Exception:
             pass
 
-        # Insert new rows at position 3 (after description + header)
-        worksheet.insert_rows(new_rows, row=3, value_input_option="USER_ENTERED")
+        # Insert new rows at position 4 (after 3 header rows)
+        worksheet.insert_rows(new_rows, row=4, value_input_option="USER_ENTERED")
 
-    # ── Re-apply auto-filter on the full range (starting at header row 2) ──
+    # ── Re-apply auto-filter on the full range (starting at header row 3) ──
     try:
         worksheet.clear_basic_filter()
     except Exception:
@@ -624,7 +651,7 @@ def populate_weekly_report_tab(
         actual_last = len(all_vals)
     except Exception:
         actual_last = total_rows
-    worksheet.set_basic_filter(f"A2:{col_letter}{actual_last}")
+    worksheet.set_basic_filter(f"A3:{col_letter}{actual_last}")
 
     logger.info(f"Weekly Report: appended {len(new_rows)} rows for week '{week_label}' (total rows now: {actual_last})")
     return len(new_rows)
