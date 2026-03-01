@@ -556,9 +556,9 @@ def populate_weekly_report_tab(
         "(1★ Count / # Reviews) × 100",
         "SUM(all ratings from 1st of month to week end) / COUNT(all reviews in that range)",
         "COUNT(all reviews from 1st of month to week end)",
-        "Avg Rating (col H) − MTD Avg (col M)",
-        "MTD # Reviews (col N) / weeks elapsed in month so far",
-        "# Reviews (col G) − MTD Avg/Wk (col P)",
+        "Avg Rating − MTD Avg",
+        "MTD # Reviews / weeks elapsed in month so far",
+        "# Reviews − MTD Avg/Wk",
     ]
 
     # ── Read existing data to check for duplicates ──
