@@ -4,7 +4,6 @@
 credentials.json
 token.json
 data/
-!data/reviews.db
 
 # Temporary files
 .tmp/

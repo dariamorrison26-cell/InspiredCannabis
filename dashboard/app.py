@@ -93,11 +93,22 @@ st.markdown(f"""
         font-size: 1.3rem;
         font-weight: 700;
         letter-spacing: 0.5px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }}
+    .dashboard-header h1 img {{
+        flex-shrink: 0;
     }}
     .dashboard-header .subtitle {{
         font-size: 0.75rem;
         opacity: 0.8;
         margin-top: 2px;
+    }}
+
+    /* Sidebar logo alignment — push sidebar content down to align with header */
+    [data-testid="stSidebar"] > div:first-child {{
+        padding-top: 0.5rem;
     }}
 
     /* KPI Cards */
@@ -164,6 +175,41 @@ st.markdown(f"""
         color: #1a1a2e !important;
         background-color: {WHITE} !important;
     }}
+    /* Sidebar button text must be visible (dark on white bg) */
+    [data-testid="stSidebar"] button,
+    [data-testid="stSidebar"] button * {{
+        color: {NAVY} !important;
+    }}
+    [data-testid="stSidebar"] button {{
+        background-color: {WHITE} !important;
+        border: 1px solid rgba(255,255,255,0.3) !important;
+        font-weight: 600 !important;
+    }}
+    [data-testid="stSidebar"] button:hover,
+    [data-testid="stSidebar"] button:hover * {{
+        background-color: {ORANGE} !important;
+        color: {WHITE} !important;
+        border-color: {ORANGE} !important;
+    }}
+    /* Sidebar multiselect — keep pill text dark on white bg */
+    [data-testid="stSidebar"] [data-baseweb="tag"] * {{
+        color: {NAVY} !important;
+    }}
+    /* Position the clear-all + chevron icons next to the Brand label */
+    [data-testid="stSidebar"] .stMultiSelect {{
+        position: relative;
+    }}
+    [data-testid="stSidebar"] [data-baseweb="select"] > div > div:last-child {{
+        position: absolute !important;
+        top: -30px !important;
+        right: 0 !important;
+        z-index: 10;
+    }}
+    [data-testid="stSidebar"] [data-baseweb="select"] svg,
+    [data-testid="stSidebar"] [data-baseweb="select"] svg path {{
+        fill: {WHITE} !important;
+        color: {WHITE} !important;
+    }}
 
     /* Tabs */
     .stTabs [data-baseweb="tab-list"] {{
@@ -206,6 +252,8 @@ st.markdown(f"""
     header {{ visibility: hidden; }}
 </style>
 """, unsafe_allow_html=True)
+
+
 
 
 # =============================================================================
@@ -497,21 +545,38 @@ def page_overview(reviews_df, stores_df, selected_brands):
             star_labels = [f"{int(s)} ★" for s in star_counts.index]
             colors = ["#D32F2F", "#FF7043", "#FFB74D", "#AED581", "#4CAF50"]
 
+            # Build per-slice text position: inside for big slices, outside for small
+            total_for_pct = star_counts.values.sum()
+            custom_text = []
+            text_positions = []
+            for v in star_counts.values:
+                pct = v / total_for_pct * 100
+                custom_text.append(f"{v:,} ({pct:.1f}%)")
+                text_positions.append("inside" if pct >= 5 else "outside")
+
             fig = go.Figure(data=[go.Pie(
                 labels=star_labels,
                 values=star_counts.values,
                 hole=0.5,
                 marker_colors=colors[:len(star_counts)],
-                textinfo="percent+value",
-                textfont=dict(size=12),
+                text=custom_text,
+                textinfo="label+text",
+                textposition=text_positions,
+                insidetextorientation="horizontal",
+                textfont=dict(size=11, color="white"),
+                outsidetextfont=dict(size=10, color="#333"),
+                hoverinfo="label+value+percent",
+                direction="clockwise",
+                sort=False,
+                rotation=180,
             )])
             fig.update_layout(
-                height=220,
-                margin=dict(l=20, r=20, t=10, b=10),
+                height=340,
+                margin=dict(l=50, r=50, t=20, b=20),
                 paper_bgcolor="white",
-                legend=dict(orientation="h", y=-0.15),
+                showlegend=False,
                 annotations=[dict(
-                    text=f"{total_reviews}<br>Total",
+                    text=f"{total_reviews:,}<br>Total",
                     x=0.5, y=0.5,
                     font_size=16, font_color=NAVY,
                     showarrow=False
@@ -762,15 +827,15 @@ def page_overview(reviews_df, stores_df, selected_brands):
             column_config=col_config,
         )
 
-        # CSV Export for performance table
-        csv = perf_df.to_csv(index=False)
-        st.download_button(
-            label="📥 Export Performance Data",
-            data=csv,
-            file_name=f"store_performance_{date.today().isoformat()}.csv",
-            mime="text/csv",
-            key="perf_export"
-        )
+        # CSV Export for performance table (hidden for now)
+        # csv = perf_df.to_csv(index=False)
+        # st.download_button(
+        #     label="📥 Export Performance Data",
+        #     data=csv,
+        #     file_name=f"store_performance_{date.today().isoformat()}.csv",
+        #     mime="text/csv",
+        #     key="perf_export"
+        # )
     else:
         st.info("No stores match the selected filters")
 
@@ -847,14 +912,14 @@ def page_all_reviews(reviews_df):
         }
     )
 
-    # CSV Export
-    csv = display_cols.to_csv(index=False)
-    st.download_button(
-        label="📥 Export to CSV",
-        data=csv,
-        file_name=f"all_reviews_{date.today().isoformat()}.csv",
-        mime="text/csv",
-    )
+    # CSV Export (hidden for now)
+    # csv = display_cols.to_csv(index=False)
+    # st.download_button(
+    #     label="📥 Export to CSV",
+    #     data=csv,
+    #     file_name=f"all_reviews_{date.today().isoformat()}.csv",
+    #     mime="text/csv",
+    # )
 
 
 # =============================================================================
@@ -1033,15 +1098,15 @@ def page_needs_attention(reviews_df):
         }
     )
 
-    # CSV Export
-    csv = display_cols.to_csv(index=False)
-    st.download_button(
-        label="📥 Export Needs Attention",
-        data=csv,
-        file_name=f"needs_attention_{date.today().isoformat()}.csv",
-        mime="text/csv",
-        key="needs_attention_export"
-    )
+    # CSV Export (hidden for now)
+    # csv = display_cols.to_csv(index=False)
+    # st.download_button(
+    #     label="📥 Export Needs Attention",
+    #     data=csv,
+    #     file_name=f"needs_attention_{date.today().isoformat()}.csv",
+    #     mime="text/csv",
+    #     key="needs_attention_export"
+    # )
 
 
 # =============================================================================
@@ -1368,15 +1433,15 @@ def page_weekly_report(reviews_df, stores_df):
         column_config=col_config,
     )
 
-    # CSV Export
-    csv = weekly_df.to_csv(index=False)
-    st.download_button(
-        label="📥 Export Weekly Data",
-        data=csv,
-        file_name=f"weekly_report_{range_start}_{range_end}.csv",
-        mime="text/csv",
-        key="weekly_export"
-    )
+    # CSV Export (hidden for now)
+    # csv = weekly_df.to_csv(index=False)
+    # st.download_button(
+    #     label="📥 Export Weekly Data",
+    #     data=csv,
+    #     file_name=f"weekly_report_{range_start}_{range_end}.csv",
+    #     mime="text/csv",
+    #     key="weekly_export"
+    # )
 
 
 # =============================================================================
@@ -1665,15 +1730,15 @@ def page_monthly_report(reviews_df, stores_df):
         column_config=col_config,
     )
 
-    # CSV Export
-    csv = monthly_df.to_csv(index=False)
-    st.download_button(
-        label="📥 Export Monthly Data",
-        data=csv,
-        file_name=f"monthly_report_{month_label.replace(' ', '_')}.csv",
-        mime="text/csv",
-        key="monthly_export"
-    )
+    # CSV Export (hidden for now)
+    # csv = monthly_df.to_csv(index=False)
+    # st.download_button(
+    #     label="📥 Export Monthly Data",
+    #     data=csv,
+    #     file_name=f"monthly_report_{month_label.replace(' ', '_')}.csv",
+    #     mime="text/csv",
+    #     key="monthly_export"
+    # )
 
 
 def main():
@@ -1689,7 +1754,7 @@ def main():
 
     # Dashboard header
     logo_b64 = get_logo_base64()
-    logo_html = f'<img src="data:image/png;base64,{logo_b64}" style="width: 44px; height: 44px; border-radius: 50%; vertical-align: middle; margin-right: 12px;" />' if logo_b64 else "🌿"
+    logo_html = f'<img src="data:image/png;base64,{logo_b64}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" />' if logo_b64 else "🌿"
     st.markdown(f"""
     <div class="dashboard-header">
         <div>
