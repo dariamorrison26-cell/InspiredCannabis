@@ -1,0 +1,66 @@
+name: Weekly Review Sync
+
+on:
+  schedule:
+    # Every Monday at 8:00 AM Pacific Time (3:00 PM UTC)
+    - cron: '0 15 * * 1'
+  workflow_dispatch:  # Allow manual trigger from GitHub UI
+
+jobs:
+  sync-reviews:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install outscraper python-dotenv gspread google-auth
+
+      - name: Restore database from previous run
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          name: reviews-db
+          path: data/
+          search_artifacts: true
+          if_no_artifact_found: warn
+
+      - name: Create credentials file
+        run: |
+          mkdir -p .credentials
+          echo '${{ secrets.GOOGLE_SHEETS_CREDENTIALS_JSON }}' > .credentials/service-account.json
+
+      - name: Run incremental sync (new reviews only)
+        env:
+          OUTSCRAPER_API_KEY: ${{ secrets.OUTSCRAPER_API_KEY }}
+        run: |
+          python -m src.main sync
+
+      - name: Push updates to Google Sheets
+        env:
+          OUTSCRAPER_API_KEY: ${{ secrets.OUTSCRAPER_API_KEY }}
+          TARGET_SHEET_ID: ${{ secrets.TARGET_SHEET_ID }}
+          GOOGLE_SHEETS_CREDENTIALS_FILE: .credentials/service-account.json
+        run: |
+          python -m src.main report-weekly
+
+      - name: Save database for next run
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reviews-db
+          path: data/reviews.db
+          retention-days: 90
+          overwrite: true
+
+      - name: Log completion
+        run: |
+          echo "✅ Weekly sync completed at $(date)"
+          python -m src.main status
