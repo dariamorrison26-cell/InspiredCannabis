@@ -400,6 +400,19 @@ def render_sidebar():
             st.cache_data.clear()
             st.rerun()
 
+        # Data freshness indicator
+        reviews_df_fresh = get_reviews_df()
+        if not reviews_df_fresh.empty and "review_date" in reviews_df_fresh.columns:
+            latest_review = reviews_df_fresh["review_date"].max()
+            if pd.notna(latest_review):
+                synced_str = latest_review.strftime("%b %d, %Y")
+                st.markdown(f"""
+                <div style="text-align: center; padding: 6px 0 2px 0; font-size: 0.72rem; opacity: 0.8; line-height: 1.4;">
+                    <span style="display: inline-block; width: 6px; height: 6px; background: #4CAF50; border-radius: 50%; margin-right: 4px; vertical-align: middle;"></span>
+                    Last synced: {synced_str}
+                </div>
+                """, unsafe_allow_html=True)
+
         st.markdown("---")
 
         # Brand filter
@@ -447,8 +460,8 @@ def render_sidebar():
 
         st.markdown("---")
         st.markdown(f"""
-        <div style="text-align: center; font-size: 0.7rem; opacity: 0.5;">
-            Last updated: {date.today().strftime('%b %d, %Y')}
+        <div style="text-align: center; font-size: 0.65rem; opacity: 0.4;">
+            Powered by Avelle Solutions
         </div>
         """, unsafe_allow_html=True)
 
