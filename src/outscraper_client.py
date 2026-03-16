@@ -20,7 +20,7 @@ class OutscraperClient:
         self,
         place_ids: list[str],
         cutoff_date: Optional[date] = None,
-        reviews_limit: int = 0,
+        reviews_limit: int = 200,
         batch_size: int = 10
     ) -> list[dict]:
         """
