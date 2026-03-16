@@ -618,10 +618,14 @@ def _weekly_trend(df, weeks=4, metric="count"):
 
     # Delta: this week vs last week
     delta = None
-    if len(points) >= 2 and points[-2] != 0:
-        delta = ((points[-1] - points[-2]) / abs(points[-2])) * 100
-    elif len(points) >= 2 and points[-2] == 0 and points[-1] > 0:
-        delta = 100.0
+    if len(points) >= 2:
+        if metric in ("response_pct", "five_star_pct"):
+            # For metrics already in %, show percentage-point difference
+            delta = points[-1] - points[-2]
+        elif points[-2] != 0:
+            delta = ((points[-1] - points[-2]) / abs(points[-2])) * 100
+        elif points[-1] > 0:
+            delta = 100.0
     return points, delta
 
 
@@ -684,13 +688,13 @@ def page_overview(reviews_df, stores_df, selected_brands):
                         delta=vol_delta, delta_label="% vs last wk")
     with cols[3]:
         render_kpi_card("5-Star Reviews", f"{five_star_pct:.0f}", suffix="%",
-                        delta=five_delta, delta_label="% vs last wk")
+                        delta=five_delta, delta_label=" pts vs last wk")
     with cols[4]:
         render_kpi_card("Above 4.5 ★", f"{above_45_pct:.0f}", suffix="%",
                         delta=above_45_delta, delta_label=" pts vs last wk")
     with cols[5]:
         render_kpi_card("Response Rate", f"{response_pct:.0f}", suffix="%",
-                        delta=resp_delta, delta_label="% vs last wk")
+                        delta=resp_delta, delta_label=" pts vs last wk")
 
     st.markdown("")
 
@@ -855,6 +859,66 @@ def page_overview(reviews_df, stores_df, selected_brands):
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         else:
             st.info("No review data available")
+
+    # ── Review Velocity Trendline ─────────────────────────────────────────
+    st.markdown('<div class="section-header">Review Velocity — Weekly Trend</div>', unsafe_allow_html=True)
+    if not reviews_df.empty and "review_date" in reviews_df.columns:
+        weekly = reviews_df.copy()
+        weekly["week"] = weekly["review_date"].dt.to_period("W").apply(lambda p: p.start_time)
+        weekly_counts = weekly.groupby("week").size().reset_index(name="reviews")
+        weekly_counts = weekly_counts.sort_values("week")
+
+        # 4-week moving average
+        weekly_counts["ma_4wk"] = weekly_counts["reviews"].rolling(window=4, min_periods=1).mean()
+        # Overall weekly average (goal line)
+        overall_avg = weekly_counts["reviews"].mean()
+
+        fig_vel = go.Figure()
+
+        # Weekly bars
+        fig_vel.add_trace(go.Bar(
+            x=weekly_counts["week"],
+            y=weekly_counts["reviews"],
+            name="Weekly Reviews",
+            marker_color=NAVY,
+            opacity=0.5,
+            hovertemplate="Week of %{x|%b %d}<br>%{y} reviews<extra></extra>",
+        ))
+
+        # 4-week moving average line
+        fig_vel.add_trace(go.Scatter(
+            x=weekly_counts["week"],
+            y=weekly_counts["ma_4wk"],
+            name="4-Week Avg",
+            mode="lines+markers",
+            line=dict(color=BRAND_COLORS.get("Inspired Cannabis", "#E8792B"), width=3),
+            marker=dict(size=5),
+            hovertemplate="4-wk avg: %{y:.1f}<extra></extra>",
+        ))
+
+        # Average goal line
+        fig_vel.add_hline(
+            y=overall_avg,
+            line_dash="dash",
+            line_color="#999",
+            annotation_text=f"Avg: {overall_avg:.0f}/wk",
+            annotation_position="top right",
+            annotation_font_color="#999",
+        )
+
+        fig_vel.update_layout(
+            height=300,
+            margin=dict(l=0, r=20, t=10, b=0),
+            xaxis_title="",
+            yaxis_title="# Reviews",
+            plot_bgcolor="white",
+            paper_bgcolor="white",
+            legend=dict(orientation="h", y=-0.15),
+            barmode="overlay",
+        )
+        st.plotly_chart(fig_vel, use_container_width=True, config={'displayModeBar': False})
+    else:
+        st.info("No review data available for velocity chart")
 
     # ── Store Performance Table (mirrors Online Reviews Sheet) ─────────────
     st.markdown('<div class="section-header">Store Performance</div>', unsafe_allow_html=True)
