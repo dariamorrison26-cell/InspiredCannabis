@@ -60,7 +60,7 @@ BRAND_COLORS = {
 }
 
 st.set_page_config(
-    page_title="Cannabis Reviews Dashboard",
+    page_title="Reviews Dashboard",
     page_icon="🌿",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -72,9 +72,13 @@ st.set_page_config(
 
 st.markdown(f"""
 <style>
+    /* Google Fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
     /* Global */
     .stApp {{
         background-color: {LIGHT_GREY};
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }}
 
     /* Header bar */
@@ -92,56 +96,69 @@ st.markdown(f"""
         margin: 0;
         font-size: 1.3rem;
         font-weight: 700;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.3px;
         display: flex;
         align-items: center;
         gap: 12px;
+        font-family: 'Inter', sans-serif;
     }}
     .dashboard-header h1 img {{
         flex-shrink: 0;
     }}
     .dashboard-header .subtitle {{
-        font-size: 0.75rem;
-        opacity: 0.8;
+        font-size: 0.72rem;
+        opacity: 0.75;
         margin-top: 2px;
+        font-weight: 400;
+        letter-spacing: 0.2px;
     }}
 
     /* Sidebar logo alignment — push sidebar content down to align with header */
     [data-testid="stSidebar"] > div:first-child {{
-        padding-top: 0.5rem;
+        padding-top: 0rem;
+    }}
+    /* Remove Streamlit's internal sidebar top spacer */
+    [data-testid="stSidebarContent"] {{
+        padding-top: 0rem !important;
+    }}
+    [data-testid="stSidebarUserContent"] {{
+        padding-top: 0rem !important;
     }}
 
     /* KPI Cards */
     .kpi-card {{
         background: {WHITE};
         border-radius: 10px;
-        padding: 0.5rem 0.8rem;
+        padding: 0.6rem 0.8rem;
         text-align: center;
         box-shadow: 0 2px 8px rgba(0,0,0,0.06);
         border-top: 3px solid {ORANGE};
-        transition: transform 0.2s;
+        transition: transform 0.2s, box-shadow 0.2s;
     }}
     .kpi-card:hover {{
         transform: translateY(-2px);
         box-shadow: 0 4px 16px rgba(0,0,0,0.1);
     }}
     .kpi-value {{
-        font-size: 1.5rem;
+        font-size: 1.6rem;
         font-weight: 800;
         color: {NAVY};
         margin: 0.15rem 0;
         line-height: 1;
+        letter-spacing: -0.5px;
+        font-family: 'Inter', sans-serif;
     }}
     .kpi-label {{
-        font-size: 0.65rem;
-        color: #666;
+        font-size: 0.62rem;
+        color: #888;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 1.2px;
         font-weight: 600;
     }}
     .kpi-delta {{
         font-size: 0.7rem;
-        margin-top: 2px;
+        margin-top: 3px;
+        font-weight: 600;
     }}
     .kpi-delta.positive {{ color: {SUCCESS}; }}
     .kpi-delta.negative {{ color: {ALERT}; }}
@@ -149,12 +166,14 @@ st.markdown(f"""
     /* Section headers */
     .section-header {{
         color: {NAVY};
-        font-size: 1.15rem;
+        font-size: 1.1rem;
         font-weight: 700;
-        margin: 1.5rem 0 0.8rem 0;
-        padding-bottom: 0.4rem;
+        margin: 1.2rem 0 0.6rem 0;
+        padding-bottom: 0.35rem;
         border-bottom: 2px solid {ORANGE};
         display: inline-block;
+        letter-spacing: -0.2px;
+        font-family: 'Inter', sans-serif;
     }}
 
     /* Sidebar */
@@ -213,13 +232,19 @@ st.markdown(f"""
 
     /* Tabs */
     .stTabs [data-baseweb="tab-list"] {{
-        gap: 8px;
+        gap: 6px;
     }}
     .stTabs [data-baseweb="tab"] {{
         background: {WHITE};
         border-radius: 8px 8px 0 0;
         padding: 8px 24px;
         font-weight: 600;
+        font-size: 0.85rem;
+        letter-spacing: 0.1px;
+        transition: all 0.2s ease;
+    }}
+    .stTabs [data-baseweb="tab"]:hover {{
+        background: #e8ecf1;
     }}
     .stTabs [aria-selected="true"] {{
         background: {NAVY} !important;
@@ -246,10 +271,58 @@ st.markdown(f"""
         box-shadow: 0 2px 8px rgba(0,0,0,0.06);
     }}
 
+    /* Streamlit metric labels - cleaner typography */
+    [data-testid="stMetricLabel"] {{
+        font-size: 0.75rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.3px !important;
+        text-transform: uppercase !important;
+        color: #666 !important;
+    }}
+    [data-testid="stMetricValue"] {{
+        font-weight: 800 !important;
+        letter-spacing: -0.5px !important;
+    }}
+
+    /* Plotly chart titles */
+    .js-plotly-plot .plotly .gtitle {{
+        font-family: 'Inter', sans-serif !important;
+    }}
+
+    /* Dataframe text */
+    .stDataFrame {{
+        font-size: 0.82rem;
+    }}
+
+    /* Reduce top whitespace above header */
+    .block-container {{
+        padding-top: 1rem !important;
+    }}
+
     /* Hide Streamlit branding */
     #MainMenu {{ visibility: hidden; }}
     footer {{ visibility: hidden; }}
-    header {{ visibility: hidden; }}
+    header[data-testid="stHeader"] {{
+        background: transparent !important;
+        height: 2rem !important;
+        min-height: 2rem !important;
+        padding: 0 !important;
+    }}
+    /* Style sidebar toggle as clean icon-only button */
+    [data-testid="stSidebarCollapsedControl"],
+    [data-testid="stSidebarCollapseButton"],
+    [data-testid="collapsedControl"] {{
+        display: none !important;
+    }}
+
+    /* Ensure Inter font applies broadly but not to icons */
+    .stMarkdown, .stText, .stDataFrame, .stTable,
+    [data-testid="stMetricLabel"], [data-testid="stMetricValue"],
+    .stSelectbox, .stMultiSelect, .stTextInput,
+    .stTabs [data-baseweb="tab"],
+    .stCaption, p, span, div, td, th, label, input {{
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -304,7 +377,7 @@ def render_sidebar():
         logo_b64 = get_logo_base64()
         if logo_b64:
             st.markdown(f"""
-            <div style="text-align: center; padding: 1rem 0 1rem 0;">
+            <div style="text-align: center; padding: 0 0 1rem 0; margin-top: -2.5rem;">
                 <img src="data:image/png;base64,{logo_b64}" style="width: 120px; height: 120px; border-radius: 50%;" />
                 <div style="font-size: 0.9rem; font-weight: 700; letter-spacing: 1px; margin-top: 8px;">
                     REVIEW ANALYTICS
@@ -493,6 +566,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
                     text=[f"{row['current_rating']:.2f} ★"],
                     textposition="auto",
                     showlegend=False,
+                    hovertemplate=f"{row['brand']}: {row['current_rating']:.2f} ★<extra></extra>",
                 ))
 
             fig.update_layout(
@@ -522,6 +596,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
                 color_discrete_map=BRAND_COLORS,
                 markers=True,
             )
+            fig.update_traces(hovertemplate="%{x}<br>%{y} reviews<extra></extra>")
             fig.update_layout(
                 height=220,
                 margin=dict(l=0, r=20, t=10, b=0),
@@ -571,8 +646,8 @@ def page_overview(reviews_df, stores_df, selected_brands):
                 rotation=180,
             )])
             fig.update_layout(
-                height=340,
-                margin=dict(l=50, r=50, t=20, b=20),
+                height=280,
+                margin=dict(l=40, r=40, t=30, b=30),
                 paper_bgcolor="white",
                 showlegend=False,
                 annotations=[dict(
@@ -618,10 +693,11 @@ def page_overview(reviews_df, stores_df, selected_brands):
                     text=[f"{row['rate']:.0f}% ({row['responded']}/{row['total']})"],
                     textposition="auto",
                     showlegend=False,
+                    hovertemplate=f"{row['brand']}: {row['rate']:.0f}% ({row['responded']}/{row['total']})<extra></extra>",
                 ))
 
             fig.update_layout(
-                height=220,
+                height=280,
                 margin=dict(l=0, r=20, t=10, b=0),
                 xaxis=dict(range=[0, 100], title="Response Rate (%)"),
                 yaxis=dict(title=""),
@@ -997,6 +1073,7 @@ def page_needs_attention(reviews_df):
         color_discrete_map=BRAND_COLORS,
         text="count",
     )
+    fig.update_traces(hovertemplate="%{y}: %{x} reviews<extra></extra>")
     fig.update_layout(
         height=250,
         margin=dict(l=0, r=20, t=10, b=0),
@@ -1027,6 +1104,7 @@ def page_needs_attention(reviews_df):
                 showlegend=False,
                 hovertemplate=f"{row['brand']} — {row['store_name']}<br>%{{x}} reviews<extra></extra>",
             ))
+        fig_loc.update_layout(barmode="stack")
 
         chart_height = max(300, len(loc_neg) * 28)
         fig_loc.update_layout(
@@ -1758,7 +1836,7 @@ def main():
     st.markdown(f"""
     <div class="dashboard-header">
         <div>
-            <h1>{logo_html} Cannabis Reviews Dashboard</h1>
+            <h1>{logo_html} Reviews Dashboard</h1>
             <div class="subtitle">Multi-Brand Performance Analytics • {date.today().strftime('%B %Y')}</div>
         </div>
     </div>
