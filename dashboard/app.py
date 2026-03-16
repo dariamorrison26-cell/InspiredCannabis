@@ -125,55 +125,105 @@ st.markdown(f"""
         padding-top: 0rem !important;
     }}
 
-    /* KPI Cards */
+    /* KPI Cards — Glassmorphism */
     .kpi-card {{
-        background: {WHITE};
-        border-radius: 10px;
-        padding: 0.6rem 0.8rem;
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-radius: 14px;
+        padding: 0.65rem 0.8rem 0.4rem;
         text-align: center;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+        border: 1px solid rgba(255,255,255,0.6);
         border-top: 3px solid {ORANGE};
-        transition: transform 0.2s, box-shadow 0.2s;
+        transition: transform 0.25s ease, box-shadow 0.25s ease;
+        position: relative;
+        overflow: hidden;
+        height: 120px;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: center;
+        margin: 0 2px;
+    }}
+    .kpi-card.compact {{
+        height: 65px;
+        padding: 0.4rem 0.8rem 0.3rem;
+    }}
+    .kpi-card.compact .kpi-value {{
+        font-size: 1.3rem;
     }}
     .kpi-card:hover {{
-        transform: translateY(-2px);
-        box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        transform: translateY(-3px);
+        box-shadow: 0 8px 30px rgba(0,0,0,0.1), 0 2px 6px rgba(0,0,0,0.06);
     }}
     .kpi-value {{
         font-size: 1.6rem;
         font-weight: 800;
         color: {NAVY};
-        margin: 0.15rem 0;
+        margin: 0.1rem 0;
         line-height: 1;
         letter-spacing: -0.5px;
         font-family: 'Inter', sans-serif;
+        animation: countUp 0.6s ease-out;
+    }}
+    @keyframes countUp {{
+        from {{ opacity: 0; transform: translateY(8px); }}
+        to {{ opacity: 1; transform: translateY(0); }}
     }}
     .kpi-label {{
-        font-size: 0.62rem;
+        font-size: 0.6rem;
         color: #888;
         text-transform: uppercase;
         letter-spacing: 1.2px;
         font-weight: 600;
+        margin-top: 2px;
     }}
     .kpi-delta {{
-        font-size: 0.7rem;
-        margin-top: 3px;
-        font-weight: 600;
+        font-size: 0.68rem;
+        margin-top: 2px;
+        font-weight: 700;
+        letter-spacing: -0.2px;
     }}
     .kpi-delta.positive {{ color: {SUCCESS}; }}
     .kpi-delta.negative {{ color: {ALERT}; }}
+    .kpi-sparkline {{
+        margin-top: 2px;
+        font-size: 14px;
+        letter-spacing: 1px;
+        line-height: 1;
+        opacity: 0.75;
+        color: {NAVY};
+    }}
 
     /* Section headers */
     .section-header {{
         color: {NAVY};
         font-size: 1.1rem;
         font-weight: 700;
-        margin: 1.2rem 0 0.6rem 0;
+        margin: 0 0 0.4rem 0;
         padding-bottom: 0.35rem;
         border-bottom: 2px solid {ORANGE};
         display: inline-block;
         letter-spacing: -0.2px;
         font-family: 'Inter', sans-serif;
+    }}
+
+    /* Plotly Chart Containers — Glassmorphism */
+    [data-testid="stPlotlyChart"] {{
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-radius: 14px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+        border: 1px solid rgba(255,255,255,0.6);
+        transition: transform 0.25s ease, box-shadow 0.25s ease;
+        overflow: hidden;
+        padding: 0.3rem;
+    }}
+    [data-testid="stPlotlyChart"]:hover {{
+        transform: translateY(-2px);
+        box-shadow: 0 8px 30px rgba(0,0,0,0.1), 0 2px 6px rgba(0,0,0,0.06);
     }}
 
     /* Sidebar */
@@ -496,24 +546,77 @@ def apply_filters(df, selected_brands, date_range, min_rating, search_term):
 
 
 # =============================================================================
-# KPI Scorecard Component
+# KPI Scorecard Component (Enhanced)
 # =============================================================================
 
-def render_kpi_card(label, value, delta=None, delta_label="", prefix="", suffix=""):
-    """Render a single KPI card."""
+def _sparkline_chars(data_points):
+    """Generate Unicode block-character sparkline (plain text, no HTML)."""
+    if not data_points or len(data_points) < 2:
+        return ""
+    blocks = "\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588"
+    mn, mx = min(data_points), max(data_points)
+    rng = mx - mn if mx != mn else 1
+    chars = []
+    for v in data_points:
+        idx = int((v - mn) / rng * 7)
+        chars.append(blocks[min(idx, 7)])
+    return " ".join(chars)
+
+
+def render_kpi_card(label, value, delta=None, delta_label="", prefix="", suffix="", sparkline=None, spark_color=None, compact=False):
+    """Render an enhanced KPI card with glassmorphism, sparkline, and delta."""
     delta_html = ""
-    if delta is not None:
+    if delta is not None and delta != 0:
         delta_class = "positive" if delta >= 0 else "negative"
         delta_icon = "↑" if delta >= 0 else "↓"
-        delta_html = f'<div class="kpi-delta {delta_class}">{delta_icon} {abs(delta):.1f} {delta_label}</div>'
+        delta_html = f'<div class="kpi-delta {delta_class}">{delta_icon} {abs(delta):.1f}{delta_label}</div>'
 
+    spark_html = ""
+    if sparkline and len(sparkline) >= 2:
+        spark_text = _sparkline_chars(sparkline)
+        spark_html = f'<div class="kpi-sparkline">{spark_text}</div>'
+
+    card_class = "kpi-card compact" if compact else "kpi-card"
     st.markdown(f"""
-    <div class="kpi-card">
+    <div class="{card_class}">
         <div class="kpi-label">{label}</div>
         <div class="kpi-value">{prefix}{value}{suffix}</div>
         {delta_html}
+        {spark_html}
     </div>
     """, unsafe_allow_html=True)
+
+
+def _weekly_trend(df, weeks=4, metric="count"):
+    """Compute weekly data points for sparkline and delta."""
+    if df.empty or "review_date" not in df.columns:
+        return [], None
+    today = pd.Timestamp.now().normalize()
+    points = []
+    for w in range(weeks - 1, -1, -1):
+        end = today - timedelta(weeks=w)
+        start = end - timedelta(weeks=1)
+        week_df = df[(df["review_date"] >= start) & (df["review_date"] < end)]
+        if metric == "count":
+            points.append(len(week_df))
+        elif metric == "avg_rating":
+            points.append(week_df["rating"].mean() if not week_df.empty else 0)
+        elif metric == "five_star_pct":
+            total = len(week_df)
+            five = len(week_df[week_df["rating"] == 5]) if total > 0 else 0
+            points.append((five / total * 100) if total > 0 else 0)
+        elif metric == "response_pct":
+            total = len(week_df)
+            resp = len(week_df[week_df["owner_response"].notna() & (week_df["owner_response"] != "")]) if total > 0 else 0
+            points.append((resp / total * 100) if total > 0 else 0)
+
+    # Delta: this week vs last week
+    delta = None
+    if len(points) >= 2 and points[-2] != 0:
+        delta = ((points[-1] - points[-2]) / abs(points[-2])) * 100
+    elif len(points) >= 2 and points[-2] == 0 and points[-1] > 0:
+        delta = 100.0
+    return points, delta
 
 
 # =============================================================================
@@ -526,7 +629,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
     # Filter stores by selected brands
     filtered_stores = stores_df[stores_df["brand"].isin(selected_brands)] if selected_brands else stores_df
 
-    # ── KPI Row ──────────────────────────────────────────────────────────
+    # ── KPI Calculations ─────────────────────────────────────────────────
     total_stores = len(filtered_stores)
     total_reviews = len(reviews_df)
 
@@ -542,19 +645,46 @@ def page_overview(reviews_df, stores_df, selected_brands):
     responded = len(reviews_df[reviews_df["owner_response"].notna() & (reviews_df["owner_response"] != "")]) if not reviews_df.empty else 0
     response_pct = (responded / total_reviews * 100) if total_reviews > 0 else 0
 
+    # ── Weekly Trends (4-week sparklines) ─────────────────────────────────
+    vol_trend, vol_delta = _weekly_trend(reviews_df, metric="count")
+    rat_trend, rat_delta = _weekly_trend(reviews_df, metric="avg_rating")
+    five_trend, five_delta = _weekly_trend(reviews_df, metric="five_star_pct")
+    resp_trend, resp_delta = _weekly_trend(reviews_df, metric="response_pct")
+
+    # ── Above 4.5 delta (per-store weekly review avg) ─────────────────────
+    above_45_delta = None
+    if not reviews_df.empty and "review_date" in reviews_df.columns and "place_id" in reviews_df.columns:
+        today = pd.Timestamp.now().normalize()
+        cur_start, cur_end = today - timedelta(weeks=1), today
+        prv_start, prv_end = today - timedelta(weeks=2), today - timedelta(weeks=1)
+        cur_wk = reviews_df[(reviews_df["review_date"] >= cur_start) & (reviews_df["review_date"] < cur_end)]
+        prv_wk = reviews_df[(reviews_df["review_date"] >= prv_start) & (reviews_df["review_date"] < prv_end)]
+        if not cur_wk.empty and not prv_wk.empty:
+            cur_store_avg = cur_wk.groupby("place_id")["rating"].mean()
+            prv_store_avg = prv_wk.groupby("place_id")["rating"].mean()
+            cur_pct = (cur_store_avg >= 4.5).sum() / len(cur_store_avg) * 100
+            prv_pct = (prv_store_avg >= 4.5).sum() / len(prv_store_avg) * 100
+            above_45_delta = cur_pct - prv_pct  # percentage point change
+
+    # ── KPI Row ──────────────────────────────────────────────────────────
     cols = st.columns(6)
     with cols[0]:
         render_kpi_card("Total Stores", total_stores)
     with cols[1]:
-        render_kpi_card("Avg Rating", f"{avg_rating:.2f}", suffix=" ★")
+        render_kpi_card("Avg Rating", f"{avg_rating:.2f}", suffix=" ★",
+                        delta=rat_delta, delta_label="% vs last wk")
     with cols[2]:
-        render_kpi_card("Total Reviews", total_reviews)
+        render_kpi_card("Total Reviews", f"{total_reviews:,}",
+                        delta=vol_delta, delta_label="% vs last wk")
     with cols[3]:
-        render_kpi_card("5-Star Reviews", f"{five_star_pct:.0f}", suffix="%")
+        render_kpi_card("5-Star Reviews", f"{five_star_pct:.0f}", suffix="%",
+                        delta=five_delta, delta_label="% vs last wk")
     with cols[4]:
-        render_kpi_card("Above 4.5 ★", f"{above_45_pct:.0f}", suffix="%")
+        render_kpi_card("Above 4.5 ★", f"{above_45_pct:.0f}", suffix="%",
+                        delta=above_45_delta, delta_label=" pts vs last wk")
     with cols[5]:
-        render_kpi_card("Response Rate", f"{response_pct:.0f}", suffix="%")
+        render_kpi_card("Response Rate", f"{response_pct:.0f}", suffix="%",
+                        delta=resp_delta, delta_label="% vs last wk")
 
     st.markdown("")
 
@@ -633,7 +763,6 @@ def page_overview(reviews_df, stores_df, selected_brands):
             star_labels = [f"{int(s)} ★" for s in star_counts.index]
             colors = ["#D32F2F", "#FF7043", "#FFB74D", "#AED581", "#4CAF50"]
 
-            # Build per-slice text position: inside for big slices, outside for small
             total_for_pct = star_counts.values.sum()
             custom_text = []
             text_positions = []
@@ -976,16 +1105,16 @@ def page_all_reviews(reviews_df):
     # Quick stats row
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        render_kpi_card("Total Reviews", len(display_df))
+        render_kpi_card("Total Reviews", len(display_df), compact=True)
     with col2:
         avg = display_df["rating"].mean() if not display_df.empty else 0
-        render_kpi_card("Avg Rating", f"{avg:.2f}", suffix=" ★")
+        render_kpi_card("Avg Rating", f"{avg:.2f}", suffix=" ★", compact=True)
     with col3:
         responded = len(display_df[display_df["Status"] == "✅ Responded"])
-        render_kpi_card("Responded", responded)
+        render_kpi_card("Responded", responded, compact=True)
     with col4:
         pending = len(display_df[display_df["Status"] == "⚠️ No Response"])
-        render_kpi_card("Pending Response", pending)
+        render_kpi_card("Pending Response", pending, compact=True)
 
     st.markdown("")
 
@@ -1050,20 +1179,19 @@ def page_needs_attention(reviews_df):
     # Quick stats
     col1, col2, col3 = st.columns(3)
     with col1:
-        render_kpi_card("Total Negative", all_neg_count)
+        render_kpi_card("Total Negative", all_neg_count, compact=True)
     with col2:
         responded = all_neg_count - unresponded_count
         rate = (responded / all_neg_count * 100) if all_neg_count > 0 else 0
-        render_kpi_card("Response Rate", f"{rate:.0f}", suffix="%")
+        render_kpi_card("Response Rate", f"{rate:.0f}", suffix="%", compact=True)
     with col3:
         st.markdown(f"""
         <a href="#unresponded-reviews" style="text-decoration: none; color: inherit; display: block;">
-            <div class="kpi-card" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" 
+            <div class="kpi-card compact" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" 
                  onmouseover="this.style.transform='scale(1.03)'; this.style.boxShadow='0 4px 16px rgba(211,47,47,0.3)';"
                  onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='';">
                 <div class="kpi-label">⚠️ UNRESPONDED</div>
-                <div class="kpi-value" style="color: #D32F2F;">{unresponded_count}</div>
-                <div style="font-size: 0.7rem; color: #999; margin-top: 4px;">Click to view ↓</div>
+                <div class="kpi-value" style="color: #D32F2F; font-size: 1.3rem;">{unresponded_count}</div>
             </div>
         </a>
         """, unsafe_allow_html=True)
@@ -1349,20 +1477,68 @@ def page_weekly_report(reviews_df, stores_df):
         weekly_df = weekly_df[weekly_df["# Reviews"] >= min_reviews]
 
     # ── KPI Cards ──
-    above_pct = pct_above_threshold(4.5)
     total_reviews = weekly_df["# Reviews"].sum()
     avg_rating = weekly_df.loc[weekly_df["# Reviews"] > 0, "Avg Rating"].mean()
     stores_shown = weekly_df[["Brand", "Store"]].drop_duplicates().shape[0]
 
+    # % Above 4.5: based on per-store avg ratings within selected weeks (not static DB rating)
+    stores_with_reviews = weekly_df[weekly_df["# Reviews"] > 0]
+    if not stores_with_reviews.empty:
+        store_avg = stores_with_reviews.groupby(["Brand", "Store"])["Avg Rating"].mean()
+        above_count = (store_avg >= 4.5).sum()
+        above_pct = round(above_count / len(store_avg) * 100, 1)
+    else:
+        above_pct = 0.0
+
+    # ── Week-over-week deltas ──
+    review_delta = None
+    rating_delta = None
+    above_pct_delta = None
+    stores_delta = None
+    unique_weeks = weekly_df["Week"].unique().tolist()
+    if len(unique_weeks) >= 2:
+        newest_wk = unique_weeks[0]
+        prev_wk = unique_weeks[1]
+        cur = weekly_df[weekly_df["Week"] == newest_wk]
+        prv = weekly_df[weekly_df["Week"] == prev_wk]
+        cur_reviews = cur["# Reviews"].sum()
+        prv_reviews = prv["# Reviews"].sum()
+        if prv_reviews > 0:
+            review_delta = ((cur_reviews - prv_reviews) / prv_reviews) * 100
+        cur_rating = cur.loc[cur["# Reviews"] > 0, "Avg Rating"].mean()
+        prv_rating = prv.loc[prv["# Reviews"] > 0, "Avg Rating"].mean()
+        if pd.notna(prv_rating) and prv_rating > 0:
+            rating_delta = ((cur_rating - prv_rating) / prv_rating) * 100
+
+        # % Above 4.5 delta: stores with weekly avg >= 4.5 (this wk vs last wk)
+        cur_with_reviews = cur[cur["# Reviews"] > 0]
+        prv_with_reviews = prv[prv["# Reviews"] > 0]
+        cur_above = len(cur_with_reviews[cur_with_reviews["Avg Rating"] >= 4.5])
+        prv_above = len(prv_with_reviews[prv_with_reviews["Avg Rating"] >= 4.5])
+        cur_above_pct = (cur_above / len(cur_with_reviews) * 100) if len(cur_with_reviews) > 0 else 0
+        prv_above_pct = (prv_above / len(prv_with_reviews) * 100) if len(prv_with_reviews) > 0 else 0
+        above_pct_delta = cur_above_pct - prv_above_pct  # percentage point change
+
+        # Stores delta: count of stores that received reviews (this wk vs last wk)
+        cur_stores = len(cur[cur["# Reviews"] > 0])
+        prv_stores = len(prv[prv["# Reviews"] > 0])
+        if prv_stores > 0:
+            stores_delta = ((cur_stores - prv_stores) / prv_stores) * 100
+
     kc1, kc2, kc3, kc4 = st.columns(4)
     with kc1:
-        render_kpi_card("Total Reviews", int(total_reviews))
+        render_kpi_card("Total Reviews", int(total_reviews),
+                        delta=review_delta, delta_label="% vs last wk")
     with kc2:
-        render_kpi_card("Avg Rating", f"{avg_rating:.2f}" if pd.notna(avg_rating) else "—")
+        render_kpi_card("Avg Rating", f"{avg_rating:.2f}" if pd.notna(avg_rating) else "—",
+                        delta=rating_delta, delta_label="% vs last wk")
     with kc3:
-        render_kpi_card("% Above 4.5", f"{above_pct}%")
+        render_kpi_card("% Above 4.5", f"{above_pct}%",
+                        delta=above_pct_delta, delta_label=" pts vs last wk")
     with kc4:
         render_kpi_card("Stores", stores_shown)
+
+    st.markdown("")
 
     # ── Charts ──────────────────────────────────────────────────────
     chart_colors = {
@@ -1370,19 +1546,19 @@ def page_weekly_report(reviews_df, stores_df):
         "secondary": "#81C784",
         "negative": "#E57373",
         "accent": "#FFD54F",
-        "text": "#E0E0E0",
-        "bg": "rgba(0,0,0,0)",
-        "grid": "rgba(255,255,255,0.08)",
+        "text": DARK_TEXT,
+        "bg": "white",
+        "grid": "rgba(0,0,0,0.06)",
     }
     chart_layout_w = dict(
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#E0E0E0", family="Inter, sans-serif"),
+        paper_bgcolor="white",
+        plot_bgcolor="white",
+        font=dict(color=DARK_TEXT, family="Inter, sans-serif"),
         margin=dict(l=40, r=20, t=30, b=30),
         height=220,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
-    grid_c = "rgba(255,255,255,0.08)"
+    grid_c = "rgba(0,0,0,0.06)"
 
     # Aggregate weekly data for charts
     week_agg = weekly_df.groupby("Week", sort=False).agg({
@@ -1629,36 +1805,93 @@ def page_monthly_report(reviews_df, stores_df):
     total_reviews = monthly_df["# Reviews"].sum()
     stores_with_reviews = monthly_df[monthly_df["# Reviews"] > 0]
     avg_rating = stores_with_reviews["Avg Rating"].mean() if not stores_with_reviews.empty else None
-    above_45 = (monthly_df["Current Rate"].dropna() >= 4.5).sum()
-    above_45_pct = round(above_45 / len(monthly_df) * 100, 1) if len(monthly_df) > 0 else 0
+    # % Above 4.5: based on monthly avg review ratings (not static DB rating)
+    stores_with_monthly_reviews = monthly_df[monthly_df["# Reviews"] > 0]
+    if not stores_with_monthly_reviews.empty:
+        above_45 = (stores_with_monthly_reviews["Avg Rating"] >= 4.5).sum()
+        above_45_pct = round(above_45 / len(stores_with_monthly_reviews) * 100, 1)
+    else:
+        above_45_pct = 0.0
     avg_mom = monthly_df["MOM Shift"].mean()
 
     month_label = f"{month_names[selected_month - 1]} {selected_year}"
 
+    # ── Month-over-month deltas ──
+    reviews_delta = None
+    rating_delta = None
+    above_pct_delta = None
+    mom_shift_delta = None
+
+    # Calculate prior month
+    if selected_month == 1:
+        prior_year_m, prior_month_m = selected_year - 1, 12
+    else:
+        prior_year_m, prior_month_m = selected_year, selected_month - 1
+
+    prior_rows = []
+    for _, store in filtered.iterrows():
+        pid = store["place_id"]
+        pmm = monthly_metrics(pid, prior_year_m, prior_month_m)
+        pshift = mom_shift(pid, prior_year_m, prior_month_m)
+        prior_rows.append({
+            "Brand": store["brand"],
+            "Store": store["store_name"],
+            "# Reviews": pmm["review_count"],
+            "Avg Rating": pmm["avg_rating"],
+            "MOM Shift": pshift if pshift is not None else 0.0,
+        })
+
+    if prior_rows:
+        prior_df = pd.DataFrame(prior_rows)
+        prior_total = prior_df["# Reviews"].sum()
+        prior_with_reviews = prior_df[prior_df["# Reviews"] > 0]
+        prior_avg = prior_with_reviews["Avg Rating"].mean() if not prior_with_reviews.empty else None
+        # Use period-specific avg rating (not static DB rating)
+        if not prior_with_reviews.empty:
+            prior_above_45 = (prior_with_reviews["Avg Rating"] >= 4.5).sum()
+            prior_above_pct = round(prior_above_45 / len(prior_with_reviews) * 100, 1)
+        else:
+            prior_above_pct = 0.0
+        prior_avg_mom = prior_df["MOM Shift"].mean()
+
+        if prior_total > 0:
+            reviews_delta = ((total_reviews - prior_total) / prior_total) * 100
+        if pd.notna(prior_avg) and prior_avg > 0 and pd.notna(avg_rating):
+            rating_delta = ((avg_rating - prior_avg) / prior_avg) * 100
+        above_pct_delta = above_45_pct - prior_above_pct  # percentage point change
+        if pd.notna(prior_avg_mom) and prior_avg_mom != 0:
+            mom_shift_delta = avg_mom - prior_avg_mom
+
     kc1, kc2, kc3, kc4 = st.columns(4)
     with kc1:
-        render_kpi_card(f"Reviews in {month_label}", int(total_reviews))
+        render_kpi_card(f"Reviews in {month_label}", int(total_reviews),
+                        delta=reviews_delta, delta_label="% vs prior mo")
     with kc2:
-        render_kpi_card("Avg Rating", f"{avg_rating:.2f}" if pd.notna(avg_rating) else "—")
+        render_kpi_card("Avg Rating", f"{avg_rating:.2f}" if pd.notna(avg_rating) else "—",
+                        delta=rating_delta, delta_label="% vs prior mo")
     with kc3:
-        render_kpi_card("% Above 4.5", f"{above_45_pct}%")
+        render_kpi_card("% Above 4.5", f"{above_45_pct}%",
+                        delta=above_pct_delta, delta_label=" pts vs prior mo")
     with kc4:
         delta_class = "positive" if avg_mom >= 0 else "negative"
-        render_kpi_card("Avg MOM Shift", f"{avg_mom:+.2f}")
+        render_kpi_card("Avg MOM Shift", f"{avg_mom:+.2f}",
+                        delta=mom_shift_delta, delta_label=" vs prior mo")
+
+    st.markdown("")
 
     # ── Charts (matching Weekly Report visual style) ────────────────
     chart_colors = {
         "primary": "#4FC3F7", "secondary": "#81C784", "negative": "#E57373",
-        "accent": "#FFD54F", "text": "#E0E0E0", "bg": "rgba(0,0,0,0)",
-        "grid": "rgba(255,255,255,0.08)",
+        "accent": "#FFD54F", "text": DARK_TEXT, "bg": "white",
+        "grid": "rgba(0,0,0,0.06)",
     }
     chart_layout_m = dict(
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#E0E0E0", family="Inter, sans-serif"),
+        paper_bgcolor="white", plot_bgcolor="white",
+        font=dict(color=DARK_TEXT, family="Inter, sans-serif"),
         margin=dict(l=40, r=20, t=30, b=30), height=220,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
-    grid_cm = "rgba(255,255,255,0.08)"
+    grid_cm = "rgba(0,0,0,0.06)"
 
     # ── Build multi-month aggregation from reviews_df for trend charts ──
     filtered_pids = filtered["place_id"].tolist()
