@@ -225,6 +225,12 @@ st.markdown(f"""
         transform: translateY(-2px);
         box-shadow: 0 8px 30px rgba(0,0,0,0.1), 0 2px 6px rgba(0,0,0,0.06);
     }}
+    /* Override Plotly crosshair cursor */
+    [data-testid="stPlotlyChart"] .nsewdrag,
+    [data-testid="stPlotlyChart"] .drag,
+    [data-testid="stPlotlyChart"] .draglayer {{
+        cursor: default !important;
+    }}
 
     /* Sidebar */
     [data-testid="stSidebar"] {{
@@ -720,7 +726,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
                 plot_bgcolor="white",
                 paper_bgcolor="white",
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         else:
             st.info("No store data available")
 
@@ -749,7 +755,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
                 paper_bgcolor="white",
                 legend=dict(orientation="h", y=-0.3),
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         else:
             st.info("No review data available")
 
@@ -799,7 +805,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
                     showarrow=False
                 )]
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         else:
             st.info("No review data available")
 
@@ -846,7 +852,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
                 plot_bgcolor="white",
                 paper_bgcolor="white",
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         else:
             st.info("No review data available")
 
@@ -1224,7 +1230,7 @@ def page_needs_attention(reviews_df):
         paper_bgcolor="white",
         showlegend=False,
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
     # Negative reviews by location
     st.markdown('<div class="section-header">Negative Reviews by Location</div>', unsafe_allow_html=True)
@@ -1256,7 +1262,7 @@ def page_needs_attention(reviews_df):
             plot_bgcolor="white",
             paper_bgcolor="white",
         )
-        st.plotly_chart(fig_loc, use_container_width=True)
+        st.plotly_chart(fig_loc, use_container_width=True, config={'displayModeBar': False})
 
     # Table with scroll anchor
     st.markdown('<div id="unresponded-reviews" class="section-header">Review Details</div>', unsafe_allow_html=True)
@@ -1583,7 +1589,7 @@ def page_weekly_report(reviews_df, stores_df):
         fig1.update_layout(**chart_layout_w, title=dict(text="📊 Weekly Review Volume", font=dict(size=14)))
         fig1.update_xaxes(gridcolor=grid_c)
         fig1.update_yaxes(gridcolor=grid_c, title_text="# Reviews")
-        st.plotly_chart(fig1, use_container_width=True)
+        st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 
     with ch2:
         # Chart 2: Avg Rating Trend
@@ -1603,7 +1609,7 @@ def page_weekly_report(reviews_df, stores_df):
         fig2.update_layout(**chart_layout_w, title=dict(text="📈 Avg Rating Trend", font=dict(size=14)))
         fig2.update_xaxes(gridcolor=grid_c)
         fig2.update_yaxes(gridcolor=grid_c, title_text="Avg Rating", range=[1, 5.2])
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
 
     ch3, ch4 = st.columns(2)
 
@@ -1632,7 +1638,7 @@ def page_weekly_report(reviews_df, stores_df):
         fig3.update_layout(**chart_layout_w, title=dict(text="🏷️ Brand: 5★ vs 1★", font=dict(size=14)), barmode="group")
         fig3.update_xaxes(gridcolor=grid_c)
         fig3.update_yaxes(gridcolor=grid_c, title_text="Count")
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, use_container_width=True, config={'displayModeBar': False})
 
     with ch4:
         # Chart 4: Star Distribution Over Weeks
@@ -1654,7 +1660,7 @@ def page_weekly_report(reviews_df, stores_df):
         fig4.update_layout(**chart_layout_w, title=dict(text="⭐ Weekly Star Distribution", font=dict(size=14)), barmode="stack")
         fig4.update_xaxes(gridcolor=grid_c)
         fig4.update_yaxes(gridcolor=grid_c, title_text="Count")
-        st.plotly_chart(fig4, use_container_width=True)
+        st.plotly_chart(fig4, use_container_width=True, config={'displayModeBar': False})
 
     # ── Results summary ──
     st.caption(f"Showing {len(weekly_df)} rows • {len(weeks)} weeks • {stores_shown} stores")
@@ -1933,7 +1939,7 @@ def page_monthly_report(reviews_df, stores_df):
         fig1.update_layout(**chart_layout_m, title=dict(text="📊 Monthly Review Volume", font=dict(size=14)))
         fig1.update_xaxes(gridcolor=grid_cm)
         fig1.update_yaxes(gridcolor=grid_cm, title_text="# Reviews")
-        st.plotly_chart(fig1, use_container_width=True)
+        st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 
     with ch2:
         # Chart 2: Avg Rating Trend (green line+markers with 4.5 goal)
@@ -1953,7 +1959,7 @@ def page_monthly_report(reviews_df, stores_df):
         fig2.update_layout(**chart_layout_m, title=dict(text="📈 Avg Rating Trend", font=dict(size=14)))
         fig2.update_xaxes(gridcolor=grid_cm)
         fig2.update_yaxes(gridcolor=grid_cm, title_text="Avg Rating", range=[1, 5.2])
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
 
     ch3, ch4 = st.columns(2)
 
@@ -1973,7 +1979,7 @@ def page_monthly_report(reviews_df, stores_df):
         fig3.update_layout(**chart_layout_m, title=dict(text="🏷️ Brand: 5★ vs 1★", font=dict(size=14)), barmode="group")
         fig3.update_xaxes(gridcolor=grid_cm)
         fig3.update_yaxes(gridcolor=grid_cm, title_text="Count")
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, use_container_width=True, config={'displayModeBar': False})
 
     with ch4:
         # Chart 4: Monthly Star Distribution (stacked bar)
@@ -1992,7 +1998,7 @@ def page_monthly_report(reviews_df, stores_df):
         fig4.update_layout(**chart_layout_m, title=dict(text="⭐ Monthly Star Distribution", font=dict(size=14)), barmode="stack")
         fig4.update_xaxes(gridcolor=grid_cm)
         fig4.update_yaxes(gridcolor=grid_cm, title_text="Count")
-        st.plotly_chart(fig4, use_container_width=True)
+        st.plotly_chart(fig4, use_container_width=True, config={'displayModeBar': False})
 
     # Chart 5: MOM Shift by Store (kept as requested)
     stores_with_shift = monthly_df[monthly_df["MOM Shift"] != 0].copy()
@@ -2011,7 +2017,7 @@ def page_monthly_report(reviews_df, stores_df):
         fig5.update_layout(**chart_layout_m, title=dict(text=f"📉 MOM Shift by Store ({month_label})", font=dict(size=14)))
         fig5.update_xaxes(gridcolor=grid_cm, tickangle=-45)
         fig5.update_yaxes(gridcolor=grid_cm, title_text="Rating Change")
-        st.plotly_chart(fig5, use_container_width=True)
+        st.plotly_chart(fig5, use_container_width=True, config={'displayModeBar': False})
 
     st.caption(f"Showing {len(monthly_df)} stores for {month_label}")
 
