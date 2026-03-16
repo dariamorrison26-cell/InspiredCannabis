@@ -1208,6 +1208,41 @@ def page_needs_attention(reviews_df):
         st.success("🎉 All negative reviews have been responded to!")
         return
 
+    # ── Filters (apply to charts AND table) ──────────────────────────────
+    working_df["_month"] = working_df["review_date"].dt.to_period("M").astype(str)
+    f1, f2, f3, f4 = st.columns([1.2, 1.5, 1.5, 1])
+    with f1:
+        month_options = ["All Months"] + sorted(working_df["_month"].unique().tolist(), reverse=True)
+        sel_month = st.selectbox("📅 Date", month_options, index=0, key="attn_date")
+    with f2:
+        brand_options = ["All Brands"] + sorted(working_df["brand"].unique().tolist())
+        sel_brand = st.selectbox("🏷️ Brand", brand_options, index=0, key="attn_brand")
+    with f3:
+        if sel_brand != "All Brands":
+            store_list = sorted(working_df[working_df["brand"] == sel_brand]["store_name"].unique().tolist())
+        else:
+            store_list = sorted(working_df["store_name"].unique().tolist())
+        store_options = ["All Stores"] + store_list
+        sel_store = st.selectbox("📍 Store", store_options, index=0, key="attn_store")
+    with f4:
+        rating_options = ["All Ratings", "⭐", "⭐⭐"]
+        sel_rating = st.selectbox("⭐ Rating", rating_options, index=0, key="attn_rating")
+
+    # Apply filters
+    working_df["Rating"] = working_df["rating"].apply(lambda r: "⭐" * int(r) if pd.notna(r) else "")
+    if sel_month != "All Months":
+        working_df = working_df[working_df["_month"] == sel_month]
+    if sel_brand != "All Brands":
+        working_df = working_df[working_df["brand"] == sel_brand]
+    if sel_store != "All Stores":
+        working_df = working_df[working_df["store_name"] == sel_store]
+    if sel_rating != "All Ratings":
+        working_df = working_df[working_df["Rating"] == sel_rating]
+
+    if working_df.empty:
+        st.info("No reviews match the selected filters.")
+        return
+
     # Negative reviews by brand
     st.markdown('<div class="section-header">Negative Reviews by Brand</div>', unsafe_allow_html=True)
     brand_neg = working_df.groupby("brand").size().reset_index(name="count").sort_values("count", ascending=False)
@@ -1268,40 +1303,12 @@ def page_needs_attention(reviews_df):
     st.markdown('<div id="unresponded-reviews" class="section-header">Review Details</div>', unsafe_allow_html=True)
 
     display_df = working_df.sort_values("review_date", ascending=False).copy()
-    display_df["Rating"] = display_df["rating"].apply(lambda r: "⭐" * int(r) if pd.notna(r) else "")
     display_df["Status"] = display_df["owner_response"].apply(
         lambda r: "✅ Responded" if pd.notna(r) and str(r).strip() else "⚠️ No Response"
     )
     display_df["Date"] = display_df["review_date"].dt.strftime("%Y-%m-%d")
 
-    # Column-aligned filter dropdowns
-    f1, f2, f3, f4 = st.columns([1.2, 1.5, 1.5, 1])
-    with f1:
-        display_df["_month"] = display_df["review_date"].dt.to_period("M").astype(str)
-        month_options = ["All Months"] + sorted(display_df["_month"].unique().tolist(), reverse=True)
-        sel_month = st.selectbox("Date", month_options, index=0, key="attn_date", label_visibility="collapsed")
-    with f2:
-        brand_options = ["All Brands"] + sorted(display_df["brand"].unique().tolist())
-        sel_brand = st.selectbox("Brand", brand_options, index=0, key="attn_brand2", label_visibility="collapsed")
-    with f3:
-        store_options = ["All Stores"] + sorted(display_df["store_name"].unique().tolist())
-        sel_store = st.selectbox("Store", store_options, index=0, key="attn_store2", label_visibility="collapsed")
-    with f4:
-        rating_options = ["All Ratings", "⭐", "⭐⭐"]
-        sel_rating = st.selectbox("Rating", rating_options, index=0, key="attn_rating2", label_visibility="collapsed")
-
-    # Apply column filters
-    filtered = display_df.copy()
-    if sel_month != "All Months":
-        filtered = filtered[filtered["_month"] == sel_month]
-    if sel_brand != "All Brands":
-        filtered = filtered[filtered["brand"] == sel_brand]
-    if sel_store != "All Stores":
-        filtered = filtered[filtered["store_name"] == sel_store]
-    if sel_rating != "All Ratings":
-        filtered = filtered[filtered["Rating"] == sel_rating]
-
-    display_cols = filtered[[
+    display_cols = display_df[[
         "Date", "brand", "store_name", "Rating", "review_text", "Status", "owner_response"
     ]].rename(columns={
         "brand": "Brand",
@@ -1310,7 +1317,7 @@ def page_needs_attention(reviews_df):
         "owner_response": "Owner Response",
     })
 
-    st.caption(f"Showing {len(display_cols)} of {len(display_df)} reviews")
+    st.caption(f"Showing {len(display_cols)} reviews")
 
     st.dataframe(
         display_cols,
