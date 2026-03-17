@@ -823,7 +823,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
         wm_col1, wm_col2 = st.columns(2)
 
         with wm_col1:
-            st.markdown('<div class="section-header">Reviews This Week vs Monthly Pace</div>', unsafe_allow_html=True)
+            st.markdown('<div class="section-header">This Week vs Average Week by Brand</div>', unsafe_allow_html=True)
             # ── Grouped bar: This Week vs Weekly Pace per Brand ──
             brands_in_data = sorted(set(
                 list(week_reviews["brand"].unique()) +
@@ -838,7 +838,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
                 chart_data.append({
                     "Brand": brand,
                     "This Week": wk_count,
-                    "Monthly Avg/Week": round(pace, 1),
+                    "Avg per Week": round(pace, 1),
                 })
 
             if chart_data:
@@ -846,14 +846,14 @@ def page_overview(reviews_df, stores_df, selected_brands):
 
                 # Monthly weekly pace bars (background)
                 fig_wm.add_trace(go.Bar(
-                    name="Month Avg/Week",
+                    name="Avg per Week",
                     x=[d["Brand"] for d in chart_data],
-                    y=[d["Monthly Avg/Week"] for d in chart_data],
+                    y=[d["Avg per Week"] for d in chart_data],
                     marker_color=[BRAND_COLORS.get(d["Brand"], NAVY) for d in chart_data],
                     opacity=0.25,
-                    text=[f'{d["Monthly Avg/Week"]:.0f}' for d in chart_data],
+                    text=[f'{d["Avg per Week"]:.0f}' for d in chart_data],
                     textposition="outside",
-                    hovertemplate="%{x}<br>Month avg/week: %{y:.1f}<extra></extra>",
+                    hovertemplate="%{x}<br>Avg per week: %{y:.1f}<extra></extra>",
                 ))
 
                 # This week bars (foreground)
@@ -882,7 +882,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
                 st.plotly_chart(fig_wm, use_container_width=True, config={'displayModeBar': False})
 
         with wm_col2:
-            st.markdown('<div class="section-header">Week Contribution to Month</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="section-header">This Week\'s Share of {month_name}</div>', unsafe_allow_html=True)
             # ── Creative donut visualization: Week as portion of Month ──
             is_above = total_week >= weekly_pace
             status_color = SUCCESS if is_above else ORANGE
