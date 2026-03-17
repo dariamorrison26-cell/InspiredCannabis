@@ -823,6 +823,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
         wm_col1, wm_col2 = st.columns(2)
 
         with wm_col1:
+            st.markdown('<div class="section-header">Reviews This Week vs Monthly Pace</div>', unsafe_allow_html=True)
             # ── Grouped bar: This Week vs Weekly Pace per Brand ──
             brands_in_data = sorted(set(
                 list(week_reviews["brand"].unique()) +
@@ -881,6 +882,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
                 st.plotly_chart(fig_wm, use_container_width=True, config={'displayModeBar': False})
 
         with wm_col2:
+            st.markdown('<div class="section-header">Week Contribution to Month</div>', unsafe_allow_html=True)
             # ── Creative donut visualization: Week as portion of Month ──
             is_above = total_week >= weekly_pace
             status_color = SUCCESS if is_above else ORANGE
