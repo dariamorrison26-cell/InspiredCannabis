@@ -775,11 +775,11 @@ def page_overview(reviews_df, stores_df, selected_brands):
         # Current month boundaries
         month_start = today.replace(day=1)
         _, days_in_month = monthrange(today.year, today.month)
-        month_end = today.replace(day=days_in_month)
 
         # Days elapsed in month & weeks elapsed
         days_elapsed = (today - month_start).days + 1
         weeks_elapsed = max(1, days_elapsed / 7)
+        day_of_week = today.weekday() + 1  # Mon=1, Sun=7
 
         # Filter data
         week_reviews = reviews_df[
@@ -788,7 +788,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
         ]
         month_reviews = reviews_df[
             (reviews_df["review_date"].dt.date >= month_start) &
-            (reviews_df["review_date"].dt.date <= month_end)
+            (reviews_df["review_date"].dt.date <= today)
         ]
 
         # Overall totals
@@ -796,8 +796,14 @@ def page_overview(reviews_df, stores_df, selected_brands):
         total_month = len(month_reviews)
         weekly_pace = total_month / weeks_elapsed if weeks_elapsed > 0 else 0
         projected_month = (total_month / days_elapsed) * days_in_month if days_elapsed > 0 else 0
+        week_pct_of_month = (total_week / total_month * 100) if total_month > 0 else 0
+        month_name = today.strftime("%B")
 
-        wm_col1, wm_col2 = st.columns([3, 2])
+        # Avg rating this week vs month
+        week_avg = week_reviews["rating"].mean() if not week_reviews.empty else 0
+        month_avg = month_reviews["rating"].mean() if not month_reviews.empty else 0
+
+        wm_col1, wm_col2 = st.columns(2)
 
         with wm_col1:
             # ── Grouped bar: This Week vs Weekly Pace per Brand ──
@@ -845,82 +851,93 @@ def page_overview(reviews_df, stores_df, selected_brands):
                 ))
 
                 fig_wm.update_layout(
-                    height=300,
-                    margin=dict(l=0, r=10, t=30, b=0),
+                    height=380,
+                    margin=dict(l=0, r=10, t=10, b=0),
                     barmode="group",
                     plot_bgcolor="white",
                     paper_bgcolor="white",
                     xaxis_title="",
                     yaxis_title="# Reviews",
-                    legend=dict(orientation="h", y=-0.15),
+                    legend=dict(orientation="h", y=-0.12),
                     font=dict(size=11),
                 )
                 st.plotly_chart(fig_wm, use_container_width=True, config={'displayModeBar': False})
 
         with wm_col2:
-            # ── Pacing Gauge ──
-            pacing_pct = (total_week / weekly_pace * 100) if weekly_pace > 0 else 0
-            is_above = pacing_pct >= 100
+            # ── Week Snapshot Card (all-in-one, no gauge) ──
+            is_above = total_week >= weekly_pace
+            pace_emoji = "🚀" if is_above else "📈"
+            status_color = SUCCESS if is_above else ORANGE
+            week_bar_pct = min(100, (total_week / weekly_pace * 100)) if weekly_pace > 0 else 0
+            month_bar_pct = (days_elapsed / days_in_month) * 100
 
-            # Week progress (what day of the week is it)
-            day_of_week = today.weekday() + 1  # Mon=1, Sun=7
-            week_progress = day_of_week / 7 * 100
+            # Per-brand week breakdown for mini bars
+            brand_week_data = []
+            for brand in brands_in_data:
+                wk_c = len(week_reviews[week_reviews["brand"] == brand])
+                mo_c = len(month_reviews[month_reviews["brand"] == brand])
+                brand_week_data.append({"brand": brand, "week": wk_c, "month": mo_c})
 
-            fig_gauge = go.Figure()
+            max_week_val = max(1, max(b["week"] for b in brand_week_data))
 
-            # Main pacing gauge
-            fig_gauge.add_trace(go.Indicator(
-                mode="gauge+number+delta",
-                value=pacing_pct,
-                number={"suffix": "%", "font": {"size": 36, "color": NAVY}},
-                delta={
-                    "reference": 100,
-                    "position": "bottom",
-                    "relative": False,
-                    "valueformat": ".0f",
-                    "suffix": "%",
-                    "increasing": {"color": SUCCESS},
-                    "decreasing": {"color": ALERT},
-                },
-                title={"text": f"Week Pacing<br><span style='font-size:0.7em;color:#666'>vs month avg/week</span>", "font": {"size": 14}},
-                gauge={
-                    "axis": {"range": [0, max(200, pacing_pct + 20)], "ticksuffix": "%"},
-                    "bar": {"color": SUCCESS if is_above else ORANGE, "thickness": 0.7},
-                    "bgcolor": "#f0f0f0",
-                    "borderwidth": 0,
-                    "steps": [
-                        {"range": [0, 80], "color": "#ffebee"},
-                        {"range": [80, 100], "color": "#fff8e1"},
-                        {"range": [100, max(200, pacing_pct + 20)], "color": "#e8f5e9"},
-                    ],
-                    "threshold": {
-                        "line": {"color": NAVY, "width": 3},
-                        "thickness": 0.8,
-                        "value": 100,
-                    },
-                },
-            ))
+            # Build brand mini-bars HTML separately
+            brand_bars_html = ""
+            for bd in brand_week_data:
+                bar_w = int((bd["week"] / max_week_val) * 100)
+                b_color = BRAND_COLORS.get(bd["brand"], NAVY)
+                b_name = bd["brand"].split()[0]
+                brand_bars_html += (
+                    f'<div style="display:flex;align-items:center;margin-bottom:3px;font-size:0.7rem;">'
+                    f'<div style="width:90px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{bd["brand"]}">{b_name}</div>'
+                    f'<div style="flex:1;background:#eee;border-radius:4px;height:7px;margin:0 6px;overflow:hidden;">'
+                    f'<div style="background:{b_color};width:{bar_w}%;height:100%;border-radius:4px;"></div></div>'
+                    f'<div style="width:50px;text-align:right;font-weight:600;color:{NAVY};">{bd["week"]}'
+                    f'<span style="color:#aaa;font-weight:400;"> / {bd["month"]}</span></div></div>'
+                )
 
-            fig_gauge.update_layout(
-                height=240,
-                margin=dict(l=20, r=20, t=50, b=10),
-                paper_bgcolor="white",
+            card_html = (
+                f'<div style="background:white;border-radius:12px;padding:1.2rem 1.4rem;'
+                f'border:1px solid #e0e0e0;box-shadow:0 1px 4px rgba(0,0,0,0.06);">'
+                # Big number
+                f'<div style="text-align:center;margin-bottom:0.8rem;">'
+                f'<div style="font-size:2.8rem;font-weight:800;color:{NAVY};line-height:1;">{total_week}</div>'
+                f'<div style="font-size:0.85rem;color:#666;margin-top:4px;">reviews this week <span style="color:#999;">(Mon – Today)</span></div>'
+                f'</div>'
+                # Week pacing bar
+                f'<div style="margin-bottom:1rem;">'
+                f'<div style="display:flex;justify-content:space-between;font-size:0.75rem;color:#555;margin-bottom:3px;">'
+                f'<span>{pace_emoji} Week vs pace ({weekly_pace:.0f}/wk)</span>'
+                f'<span style="font-weight:600;color:{status_color};">{week_bar_pct:.0f}%</span></div>'
+                f'<div style="background:#eee;border-radius:6px;height:10px;overflow:hidden;">'
+                f'<div style="background:{status_color};width:{min(100, week_bar_pct):.0f}%;height:100%;border-radius:6px;"></div>'
+                f'</div></div>'
+                # Month progress bar
+                f'<div style="margin-bottom:1rem;">'
+                f'<div style="display:flex;justify-content:space-between;font-size:0.75rem;color:#555;margin-bottom:3px;">'
+                f'<span>📅 {month_name} progress</span>'
+                f'<span style="font-weight:600;">{total_month} reviews · Day {days_elapsed}/{days_in_month}</span></div>'
+                f'<div style="background:#eee;border-radius:6px;height:10px;overflow:hidden;">'
+                f'<div style="background:{NAVY};width:{month_bar_pct:.0f}%;height:100%;border-radius:6px;"></div>'
+                f'</div></div>'
+                # Key stats row
+                f'<div style="display:flex;justify-content:space-between;background:{LIGHT_GREY};border-radius:8px;'
+                f'padding:0.6rem 0.8rem;margin-bottom:0.8rem;font-size:0.78rem;">'
+                f'<div style="text-align:center;flex:1;">'
+                f'<div style="color:#888;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.5px;">Week Avg</div>'
+                f'<div style="font-weight:700;color:{NAVY};font-size:1.05rem;">{week_avg:.1f} ★</div></div>'
+                f'<div style="text-align:center;flex:1;border-left:1px solid #ddd;border-right:1px solid #ddd;">'
+                f'<div style="color:#888;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.5px;">Month Avg</div>'
+                f'<div style="font-weight:700;color:{NAVY};font-size:1.05rem;">{month_avg:.1f} ★</div></div>'
+                f'<div style="text-align:center;flex:1;">'
+                f'<div style="color:#888;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.5px;">Projected</div>'
+                f'<div style="font-weight:700;color:{NAVY};font-size:1.05rem;">{projected_month:.0f}</div></div>'
+                f'</div>'
+                # Per-brand mini bars
+                f'<div style="font-size:0.72rem;color:#666;margin-bottom:4px;font-weight:600;">This week by brand</div>'
+                f'{brand_bars_html}'
+                f'</div>'
             )
-            st.plotly_chart(fig_gauge, use_container_width=True, config={'displayModeBar': False})
-
-            # Summary stats below gauge
-            pace_emoji = "🚀" if is_above else "⚠️"
-            month_name = today.strftime("%B")
-            st.markdown(f"""
-            <div style="text-align: center; padding: 0.5rem; background: {'#e8f5e9' if is_above else '#fff8e1'}; border-radius: 8px; font-size: 0.8rem; line-height: 1.6;">
-                <div><strong>{pace_emoji} {total_week}</strong> reviews this week (Mon–today)</div>
-                <div><strong>{total_month}</strong> reviews in {month_name} so far</div>
-                <div>Weekly pace: <strong>{weekly_pace:.1f}</strong>/week &nbsp;|&nbsp; Projected month: <strong>{projected_month:.0f}</strong></div>
-                <div style="margin-top: 4px; color: #666; font-size: 0.7rem;">
-                    Week day {day_of_week}/7 &nbsp;·&nbsp; Month day {days_elapsed}/{days_in_month}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(card_html, unsafe_allow_html=True)
     else:
         st.info("No review data available")
 
