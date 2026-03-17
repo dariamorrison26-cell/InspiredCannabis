@@ -1946,10 +1946,25 @@ def page_weekly_report(reviews_df, stores_df):
         "Avg Rating": st.column_config.NumberColumn(format="%.2f"),
         "5★ %": st.column_config.NumberColumn(format="%.1f%%"),
         "1★ %": st.column_config.NumberColumn(format="%.1f%%"),
-        "Month Avg Rating": st.column_config.NumberColumn(format="%.2f"),
-        "Rating vs Month Δ": st.column_config.NumberColumn(format="%.2f"),
-        "Month Avg/Wk": st.column_config.NumberColumn(format="%.1f"),
-        "Count vs Month Δ": st.column_config.NumberColumn(format="%.1f"),
+        "Month Avg Rating": st.column_config.NumberColumn(
+            format="%.2f",
+            help="The average star rating for this store across all reviews this month so far."
+        ),
+        "MTD Reviews": st.column_config.NumberColumn(
+            help="Total number of reviews this store has received this month so far."
+        ),
+        "Rating vs Month Δ": st.column_config.NumberColumn(
+            format="%.2f",
+            help="How this week's average rating compares to the month's average. Positive = this week rated higher than the monthly average. Negative = rated lower."
+        ),
+        "Month Avg/Wk": st.column_config.NumberColumn(
+            format="%.1f",
+            help="The average number of reviews per week this store gets in the current month. Calculated from total monthly reviews divided by weeks elapsed."
+        ),
+        "Count vs Month Δ": st.column_config.NumberColumn(
+            format="%.1f",
+            help="How this week's review count compares to the typical weekly pace. Positive = got more reviews than average this week. Negative = got fewer."
+        ),
     }
 
     brand_row_colors = {
