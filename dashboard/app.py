@@ -860,6 +860,167 @@ def page_overview(reviews_df, stores_df, selected_brands):
         else:
             st.info("No review data available")
 
+    # ── Week vs Month Performance ─────────────────────────────────────────
+    st.markdown('<div class="section-header">📊 This Week vs This Month</div>', unsafe_allow_html=True)
+
+    if not reviews_df.empty and "review_date" in reviews_df.columns:
+        today = date.today()
+        # Current week boundaries (Mon–Sun)
+        week_start = today - timedelta(days=today.weekday())
+        week_end = today
+
+        # Current month boundaries
+        month_start = today.replace(day=1)
+        _, days_in_month = monthrange(today.year, today.month)
+        month_end = today.replace(day=days_in_month)
+
+        # Days elapsed in month & weeks elapsed
+        days_elapsed = (today - month_start).days + 1
+        weeks_elapsed = max(1, days_elapsed / 7)
+
+        # Filter data
+        week_reviews = reviews_df[
+            (reviews_df["review_date"].dt.date >= week_start) &
+            (reviews_df["review_date"].dt.date <= week_end)
+        ]
+        month_reviews = reviews_df[
+            (reviews_df["review_date"].dt.date >= month_start) &
+            (reviews_df["review_date"].dt.date <= month_end)
+        ]
+
+        # Overall totals
+        total_week = len(week_reviews)
+        total_month = len(month_reviews)
+        weekly_pace = total_month / weeks_elapsed if weeks_elapsed > 0 else 0
+        projected_month = (total_month / days_elapsed) * days_in_month if days_elapsed > 0 else 0
+
+        wm_col1, wm_col2 = st.columns([3, 2])
+
+        with wm_col1:
+            # ── Grouped bar: This Week vs Weekly Pace per Brand ──
+            brands_in_data = sorted(set(
+                list(week_reviews["brand"].unique()) +
+                list(month_reviews["brand"].unique())
+            ))
+
+            chart_data = []
+            for brand in brands_in_data:
+                wk_count = len(week_reviews[week_reviews["brand"] == brand])
+                mo_count = len(month_reviews[month_reviews["brand"] == brand])
+                pace = mo_count / weeks_elapsed if weeks_elapsed > 0 else 0
+                chart_data.append({
+                    "Brand": brand,
+                    "This Week": wk_count,
+                    "Monthly Avg/Week": round(pace, 1),
+                })
+
+            if chart_data:
+                fig_wm = go.Figure()
+
+                # Monthly weekly pace bars (background)
+                fig_wm.add_trace(go.Bar(
+                    name="Month Avg/Week",
+                    x=[d["Brand"] for d in chart_data],
+                    y=[d["Monthly Avg/Week"] for d in chart_data],
+                    marker_color=[BRAND_COLORS.get(d["Brand"], NAVY) for d in chart_data],
+                    opacity=0.25,
+                    text=[f'{d["Monthly Avg/Week"]:.0f}' for d in chart_data],
+                    textposition="outside",
+                    hovertemplate="%{x}<br>Month avg/week: %{y:.1f}<extra></extra>",
+                ))
+
+                # This week bars (foreground)
+                fig_wm.add_trace(go.Bar(
+                    name="This Week",
+                    x=[d["Brand"] for d in chart_data],
+                    y=[d["This Week"] for d in chart_data],
+                    marker_color=[BRAND_COLORS.get(d["Brand"], NAVY) for d in chart_data],
+                    opacity=0.85,
+                    text=[str(d["This Week"]) for d in chart_data],
+                    textposition="outside",
+                    hovertemplate="%{x}<br>This week: %{y}<extra></extra>",
+                ))
+
+                fig_wm.update_layout(
+                    height=300,
+                    margin=dict(l=0, r=10, t=30, b=0),
+                    barmode="group",
+                    plot_bgcolor="white",
+                    paper_bgcolor="white",
+                    xaxis_title="",
+                    yaxis_title="# Reviews",
+                    legend=dict(orientation="h", y=-0.15),
+                    font=dict(size=11),
+                )
+                st.plotly_chart(fig_wm, use_container_width=True, config={'displayModeBar': False})
+
+        with wm_col2:
+            # ── Pacing Gauge ──
+            pacing_pct = (total_week / weekly_pace * 100) if weekly_pace > 0 else 0
+            is_above = pacing_pct >= 100
+
+            # Week progress (what day of the week is it)
+            day_of_week = today.weekday() + 1  # Mon=1, Sun=7
+            week_progress = day_of_week / 7 * 100
+
+            fig_gauge = go.Figure()
+
+            # Main pacing gauge
+            fig_gauge.add_trace(go.Indicator(
+                mode="gauge+number+delta",
+                value=pacing_pct,
+                number={"suffix": "%", "font": {"size": 36, "color": NAVY}},
+                delta={
+                    "reference": 100,
+                    "position": "bottom",
+                    "relative": False,
+                    "valueformat": ".0f",
+                    "suffix": "%",
+                    "increasing": {"color": SUCCESS},
+                    "decreasing": {"color": ALERT},
+                },
+                title={"text": f"Week Pacing<br><span style='font-size:0.7em;color:#666'>vs month avg/week</span>", "font": {"size": 14}},
+                gauge={
+                    "axis": {"range": [0, max(200, pacing_pct + 20)], "ticksuffix": "%"},
+                    "bar": {"color": SUCCESS if is_above else ORANGE, "thickness": 0.7},
+                    "bgcolor": "#f0f0f0",
+                    "borderwidth": 0,
+                    "steps": [
+                        {"range": [0, 80], "color": "#ffebee"},
+                        {"range": [80, 100], "color": "#fff8e1"},
+                        {"range": [100, max(200, pacing_pct + 20)], "color": "#e8f5e9"},
+                    ],
+                    "threshold": {
+                        "line": {"color": NAVY, "width": 3},
+                        "thickness": 0.8,
+                        "value": 100,
+                    },
+                },
+            ))
+
+            fig_gauge.update_layout(
+                height=240,
+                margin=dict(l=20, r=20, t=50, b=10),
+                paper_bgcolor="white",
+            )
+            st.plotly_chart(fig_gauge, use_container_width=True, config={'displayModeBar': False})
+
+            # Summary stats below gauge
+            pace_emoji = "🚀" if is_above else "⚠️"
+            month_name = today.strftime("%B")
+            st.markdown(f"""
+            <div style="text-align: center; padding: 0.5rem; background: {'#e8f5e9' if is_above else '#fff8e1'}; border-radius: 8px; font-size: 0.8rem; line-height: 1.6;">
+                <div><strong>{pace_emoji} {total_week}</strong> reviews this week (Mon–today)</div>
+                <div><strong>{total_month}</strong> reviews in {month_name} so far</div>
+                <div>Weekly pace: <strong>{weekly_pace:.1f}</strong>/week &nbsp;|&nbsp; Projected month: <strong>{projected_month:.0f}</strong></div>
+                <div style="margin-top: 4px; color: #666; font-size: 0.7rem;">
+                    Week day {day_of_week}/7 &nbsp;·&nbsp; Month day {days_elapsed}/{days_in_month}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.info("No review data available")
+
     # ── Review Velocity Trendline ─────────────────────────────────────────
     st.markdown('<div class="section-header">Review Velocity — Weekly Trend</div>', unsafe_allow_html=True)
     if not reviews_df.empty and "review_date" in reviews_df.columns:
