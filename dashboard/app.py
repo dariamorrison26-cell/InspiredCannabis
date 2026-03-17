@@ -803,6 +803,23 @@ def page_overview(reviews_df, stores_df, selected_brands):
         week_avg = week_reviews["rating"].mean() if not week_reviews.empty else 0
         month_avg = month_reviews["rating"].mean() if not month_reviews.empty else 0
 
+        # CSS to force equal-height columns
+        st.markdown("""
+        <style>
+        div[data-testid="stHorizontalBlock"]:has(> div[data-testid="stColumn"] .wm-card) {
+            align-items: stretch !important;
+        }
+        div[data-testid="stHorizontalBlock"]:has(> div[data-testid="stColumn"] .wm-card) > div[data-testid="stColumn"] {
+            display: flex !important;
+            flex-direction: column !important;
+        }
+        div[data-testid="stHorizontalBlock"]:has(> div[data-testid="stColumn"] .wm-card) > div[data-testid="stColumn"] > div {
+            flex: 1 !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        CARD_HEIGHT = 440
         wm_col1, wm_col2 = st.columns(2)
 
         with wm_col1:
@@ -851,7 +868,7 @@ def page_overview(reviews_df, stores_df, selected_brands):
                 ))
 
                 fig_wm.update_layout(
-                    height=380,
+                    height=CARD_HEIGHT,
                     margin=dict(l=0, r=10, t=10, b=0),
                     barmode="group",
                     plot_bgcolor="white",
@@ -864,80 +881,78 @@ def page_overview(reviews_df, stores_df, selected_brands):
                 st.plotly_chart(fig_wm, use_container_width=True, config={'displayModeBar': False})
 
         with wm_col2:
-            # ── Week Snapshot Card (all-in-one, no gauge) ──
+            # ── Creative donut visualization: Week as portion of Month ──
             is_above = total_week >= weekly_pace
-            pace_emoji = "🚀" if is_above else "📈"
             status_color = SUCCESS if is_above else ORANGE
-            week_bar_pct = min(100, (total_week / weekly_pace * 100)) if weekly_pace > 0 else 0
-            month_bar_pct = (days_elapsed / days_in_month) * 100
+            rest_of_month = total_month - total_week
+            week_pct = (total_week / total_month * 100) if total_month > 0 else 0
+            day_of_week = today.weekday() + 1  # Mon=1
 
-            # Per-brand week breakdown for mini bars
-            brand_week_data = []
-            for brand in brands_in_data:
-                wk_c = len(week_reviews[week_reviews["brand"] == brand])
-                mo_c = len(month_reviews[month_reviews["brand"] == brand])
-                brand_week_data.append({"brand": brand, "week": wk_c, "month": mo_c})
+            fig_donut = go.Figure()
 
-            max_week_val = max(1, max(b["week"] for b in brand_week_data))
+            # Donut: This Week vs Rest of Month
+            fig_donut.add_trace(go.Pie(
+                values=[total_week, max(0, rest_of_month)],
+                labels=["This Week", f"Rest of {month_name}"],
+                hole=0.72,
+                marker=dict(
+                    colors=[status_color, "#E8EAF0"],
+                    line=dict(color="white", width=3),
+                ),
+                textinfo="none",
+                hovertemplate=(
+                    "%{label}<br>"
+                    "%{value} reviews (%{percent})<extra></extra>"
+                ),
+                direction="clockwise",
+                sort=False,
+                rotation=90,
+                domain=dict(x=[0.15, 0.85], y=[0.22, 1.0]),
+            ))
 
-            # Build brand mini-bars HTML separately
-            brand_bars_html = ""
-            for bd in brand_week_data:
-                bar_w = int((bd["week"] / max_week_val) * 100)
-                b_color = BRAND_COLORS.get(bd["brand"], NAVY)
-                b_name = bd["brand"].split()[0]
-                brand_bars_html += (
-                    f'<div style="display:flex;align-items:center;margin-bottom:3px;font-size:0.7rem;">'
-                    f'<div style="width:90px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{bd["brand"]}">{b_name}</div>'
-                    f'<div style="flex:1;background:#eee;border-radius:4px;height:7px;margin:0 6px;overflow:hidden;">'
-                    f'<div style="background:{b_color};width:{bar_w}%;height:100%;border-radius:4px;"></div></div>'
-                    f'<div style="width:50px;text-align:right;font-weight:600;color:{NAVY};">{bd["week"]}'
-                    f'<span style="color:#aaa;font-weight:400;"> / {bd["month"]}</span></div></div>'
+            # Center annotation — big week count + context
+            fig_donut.add_annotation(
+                text=(
+                    f"<b style='font-size:42px;color:{NAVY}'>{total_week}</b><br>"
+                    f"<span style='font-size:13px;color:#888'>of {total_month} in {month_name}</span><br>"
+                    f"<span style='font-size:16px;color:{status_color};font-weight:700'>{week_pct:.1f}%</span>"
+                ),
+                x=0.5, y=0.65,
+                showarrow=False,
+                font=dict(size=14),
+            )
+
+            # Stats annotations at the bottom
+            stats = [
+                ("Week Avg", f"{week_avg:.1f} ★"),
+                (f"{month_name} Total", f"{total_month}"),
+                ("Projected", f"{projected_month:.0f}"),
+            ]
+            for i, (label, value) in enumerate(stats):
+                x_pos = 0.17 + i * 0.33
+                fig_donut.add_annotation(
+                    text=f"<span style='font-size:10px;color:#888;text-transform:uppercase'>{label}</span><br><b style='font-size:16px;color:{NAVY}'>{value}</b>",
+                    x=x_pos, y=0.08,
+                    showarrow=False,
+                    xanchor="center",
                 )
 
-            card_html = (
-                f'<div style="background:white;border-radius:12px;padding:1.2rem 1.4rem;'
-                f'border:1px solid #e0e0e0;box-shadow:0 1px 4px rgba(0,0,0,0.06);">'
-                # Big number
-                f'<div style="text-align:center;margin-bottom:0.8rem;">'
-                f'<div style="font-size:2.8rem;font-weight:800;color:{NAVY};line-height:1;">{total_week}</div>'
-                f'<div style="font-size:0.85rem;color:#666;margin-top:4px;">reviews this week <span style="color:#999;">(Mon – Today)</span></div>'
-                f'</div>'
-                # Week pacing bar
-                f'<div style="margin-bottom:1rem;">'
-                f'<div style="display:flex;justify-content:space-between;font-size:0.75rem;color:#555;margin-bottom:3px;">'
-                f'<span>{pace_emoji} Week vs pace ({weekly_pace:.0f}/wk)</span>'
-                f'<span style="font-weight:600;color:{status_color};">{week_bar_pct:.0f}%</span></div>'
-                f'<div style="background:#eee;border-radius:6px;height:10px;overflow:hidden;">'
-                f'<div style="background:{status_color};width:{min(100, week_bar_pct):.0f}%;height:100%;border-radius:6px;"></div>'
-                f'</div></div>'
-                # Month progress bar
-                f'<div style="margin-bottom:1rem;">'
-                f'<div style="display:flex;justify-content:space-between;font-size:0.75rem;color:#555;margin-bottom:3px;">'
-                f'<span>📅 {month_name} progress</span>'
-                f'<span style="font-weight:600;">{total_month} reviews · Day {days_elapsed}/{days_in_month}</span></div>'
-                f'<div style="background:#eee;border-radius:6px;height:10px;overflow:hidden;">'
-                f'<div style="background:{NAVY};width:{month_bar_pct:.0f}%;height:100%;border-radius:6px;"></div>'
-                f'</div></div>'
-                # Key stats row
-                f'<div style="display:flex;justify-content:space-between;background:{LIGHT_GREY};border-radius:8px;'
-                f'padding:0.6rem 0.8rem;margin-bottom:0.8rem;font-size:0.78rem;">'
-                f'<div style="text-align:center;flex:1;">'
-                f'<div style="color:#888;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.5px;">Week Avg</div>'
-                f'<div style="font-weight:700;color:{NAVY};font-size:1.05rem;">{week_avg:.1f} ★</div></div>'
-                f'<div style="text-align:center;flex:1;border-left:1px solid #ddd;border-right:1px solid #ddd;">'
-                f'<div style="color:#888;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.5px;">Month Avg</div>'
-                f'<div style="font-weight:700;color:{NAVY};font-size:1.05rem;">{month_avg:.1f} ★</div></div>'
-                f'<div style="text-align:center;flex:1;">'
-                f'<div style="color:#888;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.5px;">Projected</div>'
-                f'<div style="font-weight:700;color:{NAVY};font-size:1.05rem;">{projected_month:.0f}</div></div>'
-                f'</div>'
-                # Per-brand mini bars
-                f'<div style="font-size:0.72rem;color:#666;margin-bottom:4px;font-weight:600;">This week by brand</div>'
-                f'{brand_bars_html}'
-                f'</div>'
+            # Context line at very bottom
+            fig_donut.add_annotation(
+                text=f"<span style='font-size:10px;color:#aaa'>Week day {day_of_week}/7 · Month day {days_elapsed}/{days_in_month}</span>",
+                x=0.5, y=-0.02,
+                showarrow=False,
+                xanchor="center",
             )
-            st.markdown(card_html, unsafe_allow_html=True)
+
+            fig_donut.update_layout(
+                height=CARD_HEIGHT,
+                margin=dict(l=10, r=10, t=15, b=15),
+                paper_bgcolor="white",
+                showlegend=False,
+            )
+
+            st.plotly_chart(fig_donut, use_container_width=True, config={'displayModeBar': False})
     else:
         st.info("No review data available")
 
