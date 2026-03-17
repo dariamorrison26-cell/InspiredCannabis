@@ -763,103 +763,6 @@ def page_overview(reviews_df, stores_df, selected_brands):
         else:
             st.info("No review data available")
 
-    # ── Charts Row 2 ──────────────────────────────────────────────────────
-    chart_col3, chart_col4 = st.columns(2)
-
-    with chart_col3:
-        st.markdown('<div class="section-header">Star Distribution</div>', unsafe_allow_html=True)
-        if not reviews_df.empty:
-            star_counts = reviews_df["rating"].value_counts().sort_index()
-            star_labels = [f"{int(s)} ★" for s in star_counts.index]
-            colors = ["#D32F2F", "#FF7043", "#FFB74D", "#AED581", "#4CAF50"]
-
-            total_for_pct = star_counts.values.sum()
-            custom_text = []
-            text_positions = []
-            for v in star_counts.values:
-                pct = v / total_for_pct * 100
-                custom_text.append(f"{v:,} ({pct:.1f}%)")
-                text_positions.append("inside" if pct >= 5 else "outside")
-
-            fig = go.Figure(data=[go.Pie(
-                labels=star_labels,
-                values=star_counts.values,
-                hole=0.5,
-                marker_colors=colors[:len(star_counts)],
-                text=custom_text,
-                textinfo="label+text",
-                textposition=text_positions,
-                insidetextorientation="horizontal",
-                textfont=dict(size=11, color="white"),
-                outsidetextfont=dict(size=10, color="#333"),
-                hoverinfo="label+value+percent",
-                direction="clockwise",
-                sort=False,
-                rotation=180,
-            )])
-            fig.update_layout(
-                height=280,
-                margin=dict(l=40, r=40, t=30, b=30),
-                paper_bgcolor="white",
-                showlegend=False,
-                annotations=[dict(
-                    text=f"{total_reviews:,}<br>Total",
-                    x=0.5, y=0.5,
-                    font_size=16, font_color=NAVY,
-                    showarrow=False
-                )]
-            )
-            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-        else:
-            st.info("No review data available")
-
-    with chart_col4:
-        st.markdown('<div class="section-header">Response Rate by Brand</div>', unsafe_allow_html=True)
-        if not reviews_df.empty:
-            response_data = []
-            for brand in reviews_df["brand"].unique():
-                brand_reviews = reviews_df[reviews_df["brand"] == brand]
-                total = len(brand_reviews)
-                responded_count = len(brand_reviews[
-                    brand_reviews["owner_response"].notna() &
-                    (brand_reviews["owner_response"] != "")
-                ])
-                rate = (responded_count / total * 100) if total > 0 else 0
-                response_data.append({
-                    "brand": brand,
-                    "rate": rate,
-                    "responded": responded_count,
-                    "total": total
-                })
-
-            resp_df = pd.DataFrame(response_data).sort_values("rate", ascending=True)
-
-            fig = go.Figure()
-            for _, row in resp_df.iterrows():
-                color = BRAND_COLORS.get(row["brand"], NAVY)
-                fig.add_trace(go.Bar(
-                    x=[row["rate"]],
-                    y=[row["brand"]],
-                    orientation="h",
-                    marker_color=color,
-                    text=[f"{row['rate']:.0f}% ({row['responded']}/{row['total']})"],
-                    textposition="auto",
-                    showlegend=False,
-                    hovertemplate=f"{row['brand']}: {row['rate']:.0f}% ({row['responded']}/{row['total']})<extra></extra>",
-                ))
-
-            fig.update_layout(
-                height=280,
-                margin=dict(l=0, r=20, t=10, b=0),
-                xaxis=dict(range=[0, 100], title="Response Rate (%)"),
-                yaxis=dict(title=""),
-                plot_bgcolor="white",
-                paper_bgcolor="white",
-            )
-            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-        else:
-            st.info("No review data available")
-
     # ── Week vs Month Performance ─────────────────────────────────────────
     st.markdown('<div class="section-header">📊 This Week vs This Month</div>', unsafe_allow_html=True)
 
@@ -1020,6 +923,104 @@ def page_overview(reviews_df, stores_df, selected_brands):
             """, unsafe_allow_html=True)
     else:
         st.info("No review data available")
+
+    # ── Charts Row 2 ──────────────────────────────────────────────────────
+    chart_col3, chart_col4 = st.columns(2)
+
+    with chart_col3:
+        st.markdown('<div class="section-header">Star Distribution</div>', unsafe_allow_html=True)
+        if not reviews_df.empty:
+            star_counts = reviews_df["rating"].value_counts().sort_index()
+            star_labels = [f"{int(s)} ★" for s in star_counts.index]
+            colors = ["#D32F2F", "#FF7043", "#FFB74D", "#AED581", "#4CAF50"]
+
+            total_for_pct = star_counts.values.sum()
+            custom_text = []
+            text_positions = []
+            for v in star_counts.values:
+                pct = v / total_for_pct * 100
+                custom_text.append(f"{v:,} ({pct:.1f}%)")
+                text_positions.append("inside" if pct >= 5 else "outside")
+
+            fig = go.Figure(data=[go.Pie(
+                labels=star_labels,
+                values=star_counts.values,
+                hole=0.5,
+                marker_colors=colors[:len(star_counts)],
+                text=custom_text,
+                textinfo="label+text",
+                textposition=text_positions,
+                insidetextorientation="horizontal",
+                textfont=dict(size=11, color="white"),
+                outsidetextfont=dict(size=10, color="#333"),
+                hoverinfo="label+value+percent",
+                direction="clockwise",
+                sort=False,
+                rotation=180,
+            )])
+            fig.update_layout(
+                height=280,
+                margin=dict(l=40, r=40, t=30, b=30),
+                paper_bgcolor="white",
+                showlegend=False,
+                annotations=[dict(
+                    text=f"{total_reviews:,}<br>Total",
+                    x=0.5, y=0.5,
+                    font_size=16, font_color=NAVY,
+                    showarrow=False
+                )]
+            )
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        else:
+            st.info("No review data available")
+
+    with chart_col4:
+        st.markdown('<div class="section-header">Response Rate by Brand</div>', unsafe_allow_html=True)
+        if not reviews_df.empty:
+            response_data = []
+            for brand in reviews_df["brand"].unique():
+                brand_reviews = reviews_df[reviews_df["brand"] == brand]
+                total = len(brand_reviews)
+                responded_count = len(brand_reviews[
+                    brand_reviews["owner_response"].notna() &
+                    (brand_reviews["owner_response"] != "")
+                ])
+                rate = (responded_count / total * 100) if total > 0 else 0
+                response_data.append({
+                    "brand": brand,
+                    "rate": rate,
+                    "responded": responded_count,
+                    "total": total
+                })
+
+            resp_df = pd.DataFrame(response_data).sort_values("rate", ascending=True)
+
+            fig = go.Figure()
+            for _, row in resp_df.iterrows():
+                color = BRAND_COLORS.get(row["brand"], NAVY)
+                fig.add_trace(go.Bar(
+                    x=[row["rate"]],
+                    y=[row["brand"]],
+                    orientation="h",
+                    marker_color=color,
+                    text=[f"{row['rate']:.0f}% ({row['responded']}/{row['total']})"],
+                    textposition="auto",
+                    showlegend=False,
+                    hovertemplate=f"{row['brand']}: {row['rate']:.0f}% ({row['responded']}/{row['total']})<extra></extra>",
+                ))
+
+            fig.update_layout(
+                height=280,
+                margin=dict(l=0, r=20, t=10, b=0),
+                xaxis=dict(range=[0, 100], title="Response Rate (%)"),
+                yaxis=dict(title=""),
+                plot_bgcolor="white",
+                paper_bgcolor="white",
+            )
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        else:
+            st.info("No review data available")
+
 
     # ── Review Velocity Trendline ─────────────────────────────────────────
     st.markdown('<div class="section-header">Review Velocity — Weekly Trend</div>', unsafe_allow_html=True)
