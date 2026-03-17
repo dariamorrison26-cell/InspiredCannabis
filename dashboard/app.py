@@ -882,23 +882,29 @@ def page_overview(reviews_df, stores_df, selected_brands):
                 st.plotly_chart(fig_wm, use_container_width=True, config={'displayModeBar': False})
 
         with wm_col2:
-            st.markdown(f'<div class="section-header">This Week\'s Share of {month_name}</div>', unsafe_allow_html=True)
-            # ── Creative donut visualization: Week as portion of Month ──
-            is_above = total_week >= weekly_pace
-            status_color = SUCCESS if is_above else ORANGE
-            rest_of_month = total_month - total_week
-            week_pct = (total_week / total_month * 100) if total_month > 0 else 0
+            st.markdown(f'<div class="section-header">This Week in {month_name}</div>', unsafe_allow_html=True)
+            # ── Donut: This week's share of the month ──
             day_of_week = today.weekday() + 1  # Mon=1
+            rest_of_month = max(0, total_month - total_week)
+            week_pct = (total_week / total_month * 100) if total_month > 0 else 0
 
-            fig_donut = go.Figure()
+            # Calculate week number in the month and fair share
+            week_number = (days_elapsed - 1) // 7 + 1
+            total_weeks = (days_in_month + 6) // 7  # ceil division
+            fair_share_pct = 100 / total_weeks  # expected % per week
+            vs_fair = week_pct - fair_share_pct
+            is_above_fair = week_pct >= fair_share_pct
+            ring_color = ORANGE  # always orange for this week's slice
+
+            fig_ring = go.Figure()
 
             # Donut: This Week vs Rest of Month
-            fig_donut.add_trace(go.Pie(
-                values=[total_week, max(0, rest_of_month)],
+            fig_ring.add_trace(go.Pie(
+                values=[total_week, rest_of_month],
                 labels=["This Week", f"Rest of {month_name}"],
-                hole=0.72,
+                hole=0.74,
                 marker=dict(
-                    colors=[status_color, "#E8EAF0"],
+                    colors=[ring_color, "#E8EAF0"],
                     line=dict(color="white", width=3),
                 ),
                 textinfo="none",
@@ -909,52 +915,54 @@ def page_overview(reviews_df, stores_df, selected_brands):
                 direction="clockwise",
                 sort=False,
                 rotation=90,
-                domain=dict(x=[0.15, 0.85], y=[0.22, 1.0]),
+                domain=dict(x=[0.12, 0.88], y=[0.22, 1.0]),
             ))
 
-            # Center annotation — big week count + context
-            fig_donut.add_annotation(
+            # Center: big number + clear context
+            above_below = "above" if is_above_fair else "below"
+            indicator_color = SUCCESS if is_above_fair else "#D32F2F"
+            fig_ring.add_annotation(
                 text=(
-                    f"<b style='font-size:42px;color:{NAVY}'>{total_week}</b><br>"
-                    f"<span style='font-size:13px;color:#888'>of {total_month} in {month_name}</span><br>"
-                    f"<span style='font-size:16px;color:{status_color};font-weight:700'>{week_pct:.1f}%</span>"
+                    f"<b style='font-size:44px;color:{NAVY}'>{total_week}</b><br>"
+                    f"<span style='font-size:12px;color:#888'>of <b>{total_month}</b> reviews in {month_name}</span><br>"
+                    f"<b style='font-size:18px;color:{ring_color}'>{week_pct:.1f}%</b>"
+                    f"<span style='font-size:11px;color:#aaa'> of the month</span>"
                 ),
                 x=0.5, y=0.65,
                 showarrow=False,
-                font=dict(size=14),
             )
 
-            # Stats annotations at the bottom
+            # Stats at the bottom
             stats = [
-                ("Week Avg", f"{week_avg:.1f} ★"),
-                (f"{month_name} Total", f"{total_month}"),
-                ("Projected", f"{projected_month:.0f}"),
+                (f"Week {week_number} of {total_weeks}", f"{month_name}"),
+                ("This Week", f"{total_week} ({week_pct:.1f}%)"),
+                (f"{month_name} So Far", f"{total_month}"),
             ]
             for i, (label, value) in enumerate(stats):
                 x_pos = 0.17 + i * 0.33
-                fig_donut.add_annotation(
+                fig_ring.add_annotation(
                     text=f"<span style='font-size:10px;color:#888;text-transform:uppercase'>{label}</span><br><b style='font-size:16px;color:{NAVY}'>{value}</b>",
                     x=x_pos, y=0.08,
                     showarrow=False,
                     xanchor="center",
                 )
 
-            # Context line at very bottom
-            fig_donut.add_annotation(
-                text=f"<span style='font-size:10px;color:#aaa'>Week day {day_of_week}/7 · Month day {days_elapsed}/{days_in_month}</span>",
+            # Context line
+            fig_ring.add_annotation(
+                text=f"<span style='font-size:10px;color:#aaa'>Day {day_of_week} of 7 this week · Day {days_elapsed} of {days_in_month} in {month_name}</span>",
                 x=0.5, y=-0.02,
                 showarrow=False,
                 xanchor="center",
             )
 
-            fig_donut.update_layout(
+            fig_ring.update_layout(
                 height=CARD_HEIGHT,
                 margin=dict(l=10, r=10, t=15, b=15),
                 paper_bgcolor="white",
                 showlegend=False,
             )
 
-            st.plotly_chart(fig_donut, use_container_width=True, config={'displayModeBar': False})
+            st.plotly_chart(fig_ring, use_container_width=True, config={'displayModeBar': False})
     else:
         st.info("No review data available")
 
