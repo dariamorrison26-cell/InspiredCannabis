@@ -1740,11 +1740,11 @@ def page_weekly_report(reviews_df, stores_df):
                 "5★ %": weekly["five_star_pct"],
                 "1★ Count": weekly["one_star_count"],
                 "1★ %": weekly["one_star_pct"],
-                "MTD Avg": mtd["avg_rating"],
+                "Month Avg Rating": mtd["avg_rating"],
                 "MTD Reviews": mtd["review_count"],
-                "Wk vs MTD Δ": round(weekly["avg_rating"] - mtd["avg_rating"], 2) if weekly["review_count"] > 0 and mtd["review_count"] > 0 else 0.0,
-                "MTD Avg/Wk": mtd_weekly_avg,
-                "Wk vs MTD Reviews Δ": round(weekly["review_count"] - mtd_weekly_avg, 1) if weekly["review_count"] > 0 else 0.0,
+                "Rating vs Month Δ": round(weekly["avg_rating"] - mtd["avg_rating"], 2) if weekly["review_count"] > 0 and mtd["review_count"] > 0 else 0.0,
+                "Month Avg/Wk": mtd_weekly_avg,
+                "Count vs Month Δ": round(weekly["review_count"] - mtd_weekly_avg, 1) if weekly["review_count"] > 0 else 0.0,
             })
 
     if not all_weekly_data:
