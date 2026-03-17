@@ -1965,11 +1965,11 @@ def page_weekly_report(reviews_df, stores_df):
         style = brand_row_colors.get(brand, "")
         return [style] * len(row)
 
-    # Round float columns for clean display
-    float_cols = ["Avg Rating", "Current Rate", "MTD Avg", "Wk vs MTD Δ", "MTD Avg/Wk", "Wk vs MTD Reviews Δ"]
+    # Clean float columns: round and strip trailing zeros (0.000000 → 0, 0.300000 → 0.3)
+    float_cols = ["Avg Rating", "Current Rate", "Month Avg Rating", "Rating vs Month Δ", "Month Avg/Wk", "Count vs Month Δ"]
     for col in float_cols:
         if col in weekly_df.columns:
-            weekly_df[col] = weekly_df[col].round(2)
+            weekly_df[col] = weekly_df[col].apply(lambda x: float(f"{x:.2f}".rstrip('0').rstrip('.')) if pd.notna(x) else x)
 
     styled_weekly = weekly_df.style.apply(color_brand_rows, axis=1)
 
