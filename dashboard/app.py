@@ -752,12 +752,12 @@ def page_overview(reviews_df, stores_df, selected_brands):
             fig.update_traces(hovertemplate="%{x}<br>%{y} reviews<extra></extra>")
             fig.update_layout(
                 height=220,
-                margin=dict(l=0, r=20, t=10, b=0),
+                margin=dict(l=0, r=20, t=10, b=40),
                 xaxis_title="Month",
                 yaxis_title="# Reviews",
                 plot_bgcolor="white",
                 paper_bgcolor="white",
-                legend=dict(orientation="h", y=-0.3),
+                legend=dict(orientation="h", y=-0.35, title_text=""),
             )
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         else:
