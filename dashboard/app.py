@@ -1946,10 +1946,10 @@ def page_weekly_report(reviews_df, stores_df):
         "Avg Rating": st.column_config.NumberColumn(format="%.2f"),
         "5★ %": st.column_config.NumberColumn(format="%.1f%%"),
         "1★ %": st.column_config.NumberColumn(format="%.1f%%"),
-        "MTD Avg": st.column_config.NumberColumn(format="%.2f"),
-        "Wk vs MTD Δ": st.column_config.NumberColumn(format="%.2f"),
-        "MTD Avg/Wk": st.column_config.NumberColumn(format="%.1f"),
-        "Wk vs MTD Reviews Δ": st.column_config.NumberColumn(format="%.1f"),
+        "Month Avg Rating": st.column_config.NumberColumn(format="%.2f"),
+        "Rating vs Month Δ": st.column_config.NumberColumn(format="%.2f"),
+        "Month Avg/Wk": st.column_config.NumberColumn(format="%.1f"),
+        "Count vs Month Δ": st.column_config.NumberColumn(format="%.1f"),
     }
 
     brand_row_colors = {
