@@ -232,6 +232,8 @@ st.markdown(f"""
         cursor: default !important;
     }}
 
+
+
     /* Sidebar */
     [data-testid="stSidebar"] {{
         background: linear-gradient(180deg, {NAVY} 0%, #152d4a 100%);
@@ -1740,11 +1742,11 @@ def page_weekly_report(reviews_df, stores_df):
                 "5★ %": weekly["five_star_pct"],
                 "1★ Count": weekly["one_star_count"],
                 "1★ %": weekly["one_star_pct"],
-                "Month Avg Rating": mtd["avg_rating"],
-                "MTD Reviews": mtd["review_count"],
-                "Rating vs Month Δ": round(weekly["avg_rating"] - mtd["avg_rating"], 2) if weekly["review_count"] > 0 and mtd["review_count"] > 0 else 0.0,
-                "Month Avg/Wk": mtd_weekly_avg,
-                "Count vs Month Δ": round(weekly["review_count"] - mtd_weekly_avg, 1) if weekly["review_count"] > 0 else 0.0,
+                "ℹ️ Month Avg Rating": mtd["avg_rating"],
+                "ℹ️ MTD Reviews": mtd["review_count"],
+                "ℹ️ Rating vs Month Δ": round(weekly["avg_rating"] - mtd["avg_rating"], 2) if weekly["review_count"] > 0 and mtd["review_count"] > 0 else 0.0,
+                "ℹ️ Month Avg/Wk": mtd_weekly_avg,
+                "ℹ️ Count vs Month Δ": round(weekly["review_count"] - mtd_weekly_avg, 1) if weekly["review_count"] > 0 else 0.0,
             })
 
     if not all_weekly_data:
@@ -1946,24 +1948,24 @@ def page_weekly_report(reviews_df, stores_df):
         "Avg Rating": st.column_config.NumberColumn(format="%.2f"),
         "5★ %": st.column_config.NumberColumn(format="%.1f%%"),
         "1★ %": st.column_config.NumberColumn(format="%.1f%%"),
-        "Month Avg Rating": st.column_config.NumberColumn(
+        "ℹ️ Month Avg Rating": st.column_config.NumberColumn(
             format="%.2f",
-            help="The average star rating for this store across all reviews this month so far."
+            help="Average star rating across all reviews this store received this month so far."
         ),
-        "MTD Reviews": st.column_config.NumberColumn(
-            help="Total number of reviews this store has received this month so far."
+        "ℹ️ MTD Reviews": st.column_config.NumberColumn(
+            help="Total number of reviews this store received this month so far."
         ),
-        "Rating vs Month Δ": st.column_config.NumberColumn(
+        "ℹ️ Rating vs Month Δ": st.column_config.NumberColumn(
             format="%.2f",
-            help="How this week's average rating compares to the month's average. Positive = this week rated higher than the monthly average. Negative = rated lower."
+            help="This week's avg rating minus the month's avg. Positive = this week rated higher. Negative = rated lower."
         ),
-        "Month Avg/Wk": st.column_config.NumberColumn(
+        "ℹ️ Month Avg/Wk": st.column_config.NumberColumn(
             format="%.1f",
-            help="The average number of reviews per week this store gets in the current month. Calculated from total monthly reviews divided by weeks elapsed."
+            help="Average reviews per week this store gets this month (total ÷ weeks elapsed)."
         ),
-        "Count vs Month Δ": st.column_config.NumberColumn(
+        "ℹ️ Count vs Month Δ": st.column_config.NumberColumn(
             format="%.1f",
-            help="How this week's review count compares to the typical weekly pace. Positive = got more reviews than average this week. Negative = got fewer."
+            help="This week's review count minus the typical weekly pace. Positive = more reviews than usual."
         ),
     }
 
@@ -1981,7 +1983,7 @@ def page_weekly_report(reviews_df, stores_df):
         return [style] * len(row)
 
     # Clean float columns: round and strip trailing zeros (0.000000 → 0, 0.300000 → 0.3)
-    float_cols = ["Avg Rating", "Current Rate", "Month Avg Rating", "Rating vs Month Δ", "Month Avg/Wk", "Count vs Month Δ"]
+    float_cols = ["Avg Rating", "Current Rate", "ℹ️ Month Avg Rating", "ℹ️ Rating vs Month Δ", "ℹ️ Month Avg/Wk", "ℹ️ Count vs Month Δ"]
     for col in float_cols:
         if col in weekly_df.columns:
             weekly_df[col] = weekly_df[col].apply(lambda x: float(f"{x:.2f}".rstrip('0').rstrip('.')) if pd.notna(x) else x)
