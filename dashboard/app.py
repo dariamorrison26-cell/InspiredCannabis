@@ -1944,27 +1944,34 @@ def page_weekly_report(reviews_df, stores_df):
 
     # ── Data Table with brand row coloring ──
     col_config = {
-        "Current Rate": st.column_config.NumberColumn(format="%.1f"),
-        "Avg Rating": st.column_config.NumberColumn(format="%.2f"),
-        "5★ %": st.column_config.NumberColumn(format="%.1f%%"),
-        "1★ %": st.column_config.NumberColumn(format="%.1f%%"),
+        "Week": st.column_config.TextColumn(width=110),
+        "Brand": st.column_config.TextColumn(width=120),
+        "Store": st.column_config.TextColumn(width=110),
+        "Current Rate": st.column_config.NumberColumn(format="%.1f", width=70),
+        "# Reviews": st.column_config.NumberColumn(width=65),
+        "Avg Rating": st.column_config.NumberColumn(format="%.2f", width=70),
+        "5★ Count": st.column_config.NumberColumn(width=60),
+        "5★ %": st.column_config.NumberColumn(format="%.1f%%", width=55),
+        "1★ Count": st.column_config.NumberColumn(width=60),
+        "1★ %": st.column_config.NumberColumn(format="%.1f%%", width=55),
         "ℹ️ Month Avg Rating": st.column_config.NumberColumn(
-            format="%.2f",
+            format="%.2f", width=130,
             help="Average star rating across all reviews this store received this month so far."
         ),
         "ℹ️ MTD Reviews": st.column_config.NumberColumn(
+            width=110,
             help="Total number of reviews this store received this month so far."
         ),
         "ℹ️ Rating vs Month Δ": st.column_config.NumberColumn(
-            format="%.2f",
+            format="%.2f", width=140,
             help="This week's avg rating minus the month's avg. Positive = this week rated higher. Negative = rated lower."
         ),
         "ℹ️ Month Avg/Wk": st.column_config.NumberColumn(
-            format="%.1f",
+            format="%.1f", width=120,
             help="Average reviews per week this store gets this month (total ÷ weeks elapsed)."
         ),
         "ℹ️ Count vs Month Δ": st.column_config.NumberColumn(
-            format="%.1f",
+            format="%.1f", width=140,
             help="This week's review count minus the typical weekly pace. Positive = more reviews than usual."
         ),
     }
